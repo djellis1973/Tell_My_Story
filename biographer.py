@@ -21,14 +21,16 @@ try:
     from topic_bank import TopicBank
     from session_manager import SessionManager
     from vignettes import VignetteManager
-    from session_loader import SessionLoader  # NEW IMPORT
+    from session_loader import SessionLoader
+    from beta_reader import BetaReader  # NEW IMPORT
 except ImportError as e:
     st.error(f"Error importing modules: {e}")
     st.info("Please ensure all .py files are in the same directory")
     TopicBank = None
     SessionManager = None
     VignetteManager = None
-    SessionLoader = None  # NEW
+    SessionLoader = None
+    BetaReader = None  # NEW
 
 DEFAULT_WORD_TARGET = 500
 
@@ -37,6 +39,9 @@ DEFAULT_WORD_TARGET = 500
 # ============================================================================
 
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY")))
+
+# Initialize BetaReader
+beta_reader = BetaReader(client) if BetaReader else None
 
 # Load external CSS
 try:
@@ -48,10 +53,9 @@ except FileNotFoundError:
 LOGO_URL = "https://menuhunterai.com/wp-content/uploads/2026/02/tms_logo.png"
 
 # ============================================================================
-# SESSIONS LOADING - MODIFIED TO USE SESSIONLOADER
+# SESSIONS LOADING
 # ============================================================================
 
-# Initialize SessionLoader
 if SessionLoader:
     session_loader = SessionLoader()
     SESSIONS = session_loader.load_sessions_from_csv()
@@ -72,7 +76,7 @@ EMAIL_CONFIG = {
 }
 
 # ============================================================================
-# AUTHENTICATION FUNCTIONS
+# AUTHENTICATION FUNCTIONS (unchanged - keep all auth code)
 # ============================================================================
 
 def generate_password(length=12):
@@ -211,7 +215,6 @@ def send_welcome_email(user_data, credentials):
         </div>
         <p>Start building your timeline from your birthdate: {user_data.get('birthdate', 'Not specified')}</p>
         <p>If you didn't create this account, please ignore this email.</p>
-        </body>
         </html>
         """
         
@@ -237,7 +240,8 @@ def logout_user():
         'custom_topic_input', 'show_custom_topic_modal', 'show_topic_browser',
         'show_session_manager', 'show_session_creator', 'editing_custom_session',
         'show_vignette_detail', 'selected_vignette_id', 'editing_vignette_id',
-        'selected_vignette_for_session', 'published_vignette'
+        'selected_vignette_for_session', 'published_vignette',
+        'show_beta_reader', 'current_beta_feedback'  # Added beta reader keys
     ]
     for key in keys:
         st.session_state.pop(key, None)
@@ -245,7 +249,7 @@ def logout_user():
     st.rerun()
 
 # ============================================================================
-# STORAGE FUNCTIONS
+# STORAGE FUNCTIONS (unchanged)
 # ============================================================================
 
 def get_user_filename(user_id):
@@ -272,6 +276,7 @@ def save_user_data(user_id, responses_data):
             "user_id": user_id,
             "responses": responses_data,
             "vignettes": existing_data.get("vignettes", []),
+            "beta_feedback": existing_data.get("beta_feedback", {}),  # Preserve beta feedback
             "last_saved": datetime.now().isoformat()
         }
         with open(filename, 'w') as f:
@@ -282,7 +287,7 @@ def save_user_data(user_id, responses_data):
         return False
 
 # ============================================================================
-# CORE RESPONSE FUNCTIONS
+# CORE RESPONSE FUNCTIONS (unchanged)
 # ============================================================================
 
 def save_response(session_id, question, answer):
@@ -412,165 +417,48 @@ def auto_correct_text(text):
         return text
 
 # ============================================================================
-# BETA READER FUNCTIONS
+# BETA READER FUNCTIONS - REPLACED WITH MODULE CALLS
 # ============================================================================
-
-def get_session_full_text(session_id):
-    """Get all responses from a session as continuous text for beta reading"""
-    if session_id not in st.session_state.responses:
-        return ""
-    
-    session_text = ""
-    session_data = st.session_state.responses[session_id]
-    
-    if "questions" in session_data:
-        for question, answer_data in session_data["questions"].items():
-            session_text += f"Q: {question}\nA: {answer_data['answer']}\n\n"
-    
-    return session_text
 
 def generate_beta_reader_feedback(session_title, session_text, feedback_type="comprehensive"):
-    """Generate beta reader/editor feedback for a completed session"""
-    if not session_text.strip():
-        return {"error": "Session has no content to analyze"}
-    
-    critique_templates = {
-        "comprehensive": """You are a professional editor and beta reader. Analyze this life story excerpt and provide:
-        1. **Overall Impression** (2-3 sentences)
-        2. **Strengths** (3-5 bullet points)
-        3. **Areas for Improvement** (3-5 bullet points with specific suggestions)
-        4. **Continuity Check** (Note any timeline inconsistencies)
-        5. **Emotional Resonance** (How engaging/emotional is it?)
-        6. **Specific Edits** (3-5 suggested rewrites with explanations)
-        
-        Format your response clearly with headings and bullet points.""",
-        
-        "concise": """You are an experienced beta reader. Provide brief, actionable feedback on:
-        - Main strengths
-        - 2-3 specific areas to improve
-        - 1-2 specific editing suggestions
-        
-        Keep it under 300 words.""",
-        
-        "developmental": """You are a developmental editor. Focus on:
-        - Narrative structure and flow
-        - Character/personality development
-        - Pacing and detail balance
-        - Theme consistency
-        - Suggested structural changes"""
-    }
-    
-    prompt = critique_templates.get(feedback_type, critique_templates["comprehensive"])
-    
-    full_prompt = f"""{prompt}
-
-    SESSION TITLE: {session_title}
-    
-    SESSION CONTENT:
-    {session_text}
-    
-    Please provide your analysis:"""
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a thoughtful, constructive editor who balances praise with helpful critique."},
-                {"role": "user", "content": full_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=1500
-        )
-        
-        feedback = response.choices[0].message.content
-        
-        return {
-            "session_title": session_title,
-            "feedback": feedback,
-            "generated_at": datetime.now().isoformat(),
-            "feedback_type": feedback_type
-        }
-        
-    except Exception as e:
-        return {"error": f"Analysis failed: {str(e)}"}
+    """Wrapper for BetaReader.generate_feedback"""
+    if not beta_reader:
+        return {"error": "BetaReader module not available"}
+    return beta_reader.generate_feedback(session_title, session_text, feedback_type)
 
 def save_beta_feedback(user_id, session_id, feedback_data):
-    """Save beta feedback to user's data file"""
-    try:
-        filename = get_user_filename(user_id)
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                user_data = json.load(f)
-        else:
-            user_data = {"responses": {}, "vignettes": [], "beta_feedback": {}}
-        
-        if "beta_feedback" not in user_data:
-            user_data["beta_feedback"] = {}
-        
-        user_data["beta_feedback"][str(session_id)] = feedback_data
-        
-        with open(filename, 'w') as f:
-            json.dump(user_data, f, indent=2)
-        
-        return True
-    except Exception as e:
-        print(f"Error saving beta feedback: {e}")
+    """Wrapper for BetaReader.save_feedback"""
+    if not beta_reader:
         return False
+    return beta_reader.save_feedback(user_id, session_id, feedback_data, get_user_filename, load_user_data)
 
 def get_previous_beta_feedback(user_id, session_id):
-    """Retrieve previous beta feedback for a session"""
-    try:
-        filename = get_user_filename(user_id)
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                user_data = json.load(f)
-            
-            if "beta_feedback" in user_data and str(session_id) in user_data["beta_feedback"]:
-                return user_data["beta_feedback"][str(session_id)]
-    except:
-        pass
-    return None
+    """Wrapper for BetaReader.get_previous_feedback"""
+    if not beta_reader:
+        return None
+    return beta_reader.get_previous_feedback(user_id, session_id, get_user_filename, load_user_data)
 
 def show_beta_reader_modal():
-    """Display the beta reader feedback modal"""
-    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    """Wrapper for BetaReader.show_modal"""
+    if not beta_reader or not st.session_state.get('current_beta_feedback'):
+        return
     
-    feedback = st.session_state.current_beta_feedback
+    current_session = SESSIONS[st.session_state.current_session]
     
-    if st.button("← Back to Writing", key="beta_reader_back"):
+    def on_close():
         st.session_state.show_beta_reader = False
-        st.rerun()
+        st.session_state.current_beta_feedback = None
     
-    st.title(f"🦋 Beta Reader: {feedback.get('session_title', 'Session')}")
-    st.caption(f"Generated: {datetime.fromisoformat(feedback['generated_at']).strftime('%B %d, %Y at %I:%M %p')}")
-    
-    st.divider()
-    
-    # Full feedback
-    st.subheader("📝 Editor's Analysis")
-    st.markdown(feedback["feedback"])
-    
-    # Action buttons
-    st.divider()
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("🔄 Regenerate Feedback", use_container_width=True):
-            st.session_state.show_beta_reader = False
-            st.rerun()
-    
-    with col2:
-        if st.button("💾 Save to Profile", use_container_width=True, type="primary"):
-            if save_beta_feedback(st.session_state.user_id, current_session["id"], feedback):
-                st.success("Feedback saved!")
-                time.sleep(1)
-                st.session_state.show_beta_reader = False
-                st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    beta_reader.show_modal(
+        feedback=st.session_state.current_beta_feedback,
+        current_session={"id": current_session["id"], "title": current_session["title"]},
+        user_id=st.session_state.user_id,
+        save_feedback_func=save_beta_feedback,
+        on_close_callback=on_close
+    )
 
 # ============================================================================
-# MODULE INTEGRATION FUNCTIONS
+# MODULE INTEGRATION FUNCTIONS (unchanged)
 # ============================================================================
 
 def switch_to_vignette(vignette_topic, content=""):
@@ -935,7 +823,7 @@ if not SESSIONS:
     st.stop()
 
 # ============================================================================
-# PROFILE SETUP MODAL
+# PROFILE SETUP MODAL (unchanged)
 # ============================================================================
 
 if st.session_state.get('show_profile_setup', False):
@@ -1008,7 +896,7 @@ if st.session_state.get('show_profile_setup', False):
     st.stop()
 
 # ============================================================================
-# AUTHENTICATION COMPONENTS
+# AUTHENTICATION COMPONENTS (unchanged)
 # ============================================================================
 
 if not st.session_state.logged_in:
@@ -1172,7 +1060,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# SIDEBAR
+# SIDEBAR (unchanged)
 # ============================================================================
 
 with st.sidebar:
@@ -1371,7 +1259,7 @@ with st.sidebar:
             st.rerun()
 
 # ============================================================================
-# MAIN CONTENT AREA
+# MAIN CONTENT AREA (unchanged)
 # ============================================================================
 
 if st.session_state.current_session >= len(SESSIONS):
@@ -1509,7 +1397,7 @@ with col3:
 st.divider()
 
 # ============================================================================
-# BETA READER SECTION
+# BETA READER SECTION - MODIFIED TO USE MODULE
 # ============================================================================
 
 st.subheader("🦋 Beta Reader Feedback")
@@ -1541,8 +1429,11 @@ if responses_count == total_questions and total_questions > 0:
     with col2:
         if st.button("🦋 Get Beta Reader Feedback", use_container_width=True, type="primary"):
             with st.spinner("Analyzing your session with professional editor eyes..."):
-                # Get all session text
-                session_text = get_session_full_text(current_session_id)
+                # Get all session text using beta_reader
+                if beta_reader:
+                    session_text = beta_reader.get_session_full_text(current_session_id, st.session_state.responses)
+                else:
+                    session_text = ""
                 
                 if not session_text.strip():
                     st.error("Session has no content to analyze")
@@ -1573,7 +1464,7 @@ else:
 st.divider()
 
 # ============================================================================
-# SESSION PROGRESS
+# SESSION PROGRESS (unchanged)
 # ============================================================================
 
 progress_info = get_progress_info(current_session_id)
@@ -1646,7 +1537,7 @@ with col4:
     st.metric("Total Answers", f"{total_answers_all}")
 
 # ============================================================================
-# FOOTER
+# FOOTER (unchanged)
 # ============================================================================
 
 st.markdown("---")
