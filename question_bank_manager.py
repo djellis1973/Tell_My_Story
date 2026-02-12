@@ -220,7 +220,7 @@ class QuestionBankManager:
             else:
                 st.info("🔐 Please log in to create custom question banks")
     
-def _display_default_banks(self):
+    def _display_default_banks(self):
         """Display default banks with load buttons - AUTO-DETECTED FROM CSV"""
         # DEBUG - SEE WHAT FILES ACTUALLY EXIST
         import os
@@ -231,13 +231,6 @@ def _display_default_banks(self):
         else:
             st.write("❌ Directory does not exist:", self.default_banks_path)
         
-        banks = self.get_default_banks()
-        
-        if not banks:
-            st.info("📁 No CSV files found in question_banks/default/")
-    
-    banks = self.get_default_banks()
-        """Display default banks with load buttons - AUTO-DETECTED FROM CSV"""
         banks = self.get_default_banks()
         
         if not banks:
