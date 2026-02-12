@@ -584,7 +584,7 @@ def show_beta_reader_modal():
     )
 
 # ============================================================================
-# VIGNETTE FUNCTIONS - FIXED VERSIONS
+# VIGNETTE FUNCTIONS - COMPLETELY FIXED - NO ADD TO SESSION
 # ============================================================================
 
 def on_vignette_select(vignette_id):
@@ -595,7 +595,7 @@ def on_vignette_select(vignette_id):
     st.rerun()
 
 def on_vignette_edit(vignette_id):
-    """Handle vignette editing - NOW WORKING"""
+    """Handle vignette editing"""
     st.session_state.editing_vignette_id = vignette_id
     st.session_state.show_vignette_detail = False
     st.session_state.show_vignette_manager = False
@@ -603,24 +603,21 @@ def on_vignette_edit(vignette_id):
     st.rerun()
 
 def on_vignette_delete(vignette_id):
-    """Handle vignette deletion - NOW WORKING"""
+    """Handle vignette deletion"""
     if 'vignette_manager' not in st.session_state:
         st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
     
     if st.session_state.vignette_manager.delete_vignette(vignette_id):
         st.success("Vignette deleted successfully!")
-        
-        # Clear session state
         if st.session_state.get('selected_vignette_id') == vignette_id:
             st.session_state.selected_vignette_id = None
             st.session_state.show_vignette_detail = False
-        
         st.rerun()
     else:
         st.error("Failed to delete vignette")
 
 def on_vignette_publish(vignette):
-    """Handle vignette publishing - NOW WORKING"""
+    """Handle vignette publishing"""
     st.session_state.published_vignette = vignette
     st.success(f"Vignette '{vignette['title']}' published!")
     st.rerun()
@@ -632,7 +629,7 @@ def on_vignette_back():
     st.rerun()
 
 def show_vignette_modal():
-    """Display vignette creation/editing modal - FIXED"""
+    """Display vignette creation/editing modal"""
     if not VignetteManager:
         st.error("Vignette module not available")
         st.session_state.show_vignette_modal = False
@@ -653,18 +650,15 @@ def show_vignette_modal():
         else:
             st.title("✍️ Create Vignette")
     
-    # Initialize vignette manager
     if 'vignette_manager' not in st.session_state:
         st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
     
-    # Get vignette if editing
     edit_vignette = None
     if st.session_state.get('editing_vignette_id'):
         edit_vignette = st.session_state.vignette_manager.get_vignette_by_id(
             st.session_state.editing_vignette_id
         )
     
-    # Display creator
     st.session_state.vignette_manager.display_vignette_creator(
         on_publish=on_vignette_publish,
         edit_vignette=edit_vignette
@@ -673,7 +667,7 @@ def show_vignette_modal():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_vignette_manager():
-    """Display vignette gallery manager - FIXED - NO Most Popular, NO Views/Likes"""
+    """Display vignette gallery manager - NO Most Popular, NO Views/Likes"""
     if not VignetteManager:
         st.error("Vignette module not available")
         st.session_state.show_vignette_manager = False
@@ -690,11 +684,9 @@ def show_vignette_manager():
     with col2:
         st.title("📚 Your Vignettes")
     
-    # Initialize vignette manager
     if 'vignette_manager' not in st.session_state:
         st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
     
-    # Filter options - NO Most Popular
     filter_option = st.radio(
         "Show:",
         ["All Stories", "Published", "Drafts"],
@@ -708,7 +700,6 @@ def show_vignette_manager():
         "Drafts": "drafts"
     }
     
-    # Display gallery with working buttons
     st.session_state.vignette_manager.display_vignette_gallery(
         filter_by=filter_map.get(filter_option, "all"),
         on_select=on_vignette_select,
@@ -734,7 +725,7 @@ def show_vignette_manager():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_vignette_detail():
-    """Display vignette detail view - FIXED - NO Views/Likes display"""
+    """Display vignette detail view - NO ADD TO SESSION BUTTON"""
     if not VignetteManager or not st.session_state.get('selected_vignette_id'):
         st.session_state.show_vignette_detail = False
         return
@@ -748,7 +739,9 @@ def show_vignette_detail():
             st.session_state.selected_vignette_id = None
             st.rerun()
     
-    # Initialize vignette manager
+    with col2:
+        st.title("📖 Read Vignette")
+    
     if 'vignette_manager' not in st.session_state:
         st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
     
@@ -761,69 +754,12 @@ def show_vignette_detail():
         st.session_state.show_vignette_detail = False
         return
     
-    with col2:
-        st.title(vignette['title'])
-    
-    # Metadata - NO Views/Likes
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.caption(f"Theme: {vignette.get('theme', 'Uncategorized')}")
-    with col2:
-        if vignette.get('is_published'):
-            published_date = vignette.get('published_at', vignette.get('created_at', ''))[:10]
-            st.caption(f"Published: {published_date}")
-        else:
-            created_date = vignette.get('created_at', '')[:10]
-            st.caption(f"Created: {created_date}")
-    with col3:
-        st.caption(f"Words: {vignette.get('word_count', 0)}")
-    
-    st.divider()
-    
-    # Content
-    st.write(vignette['content'])
-    
-    st.divider()
-    
-    # Action buttons - All WORKING now
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📚 Add to Session", type="primary", use_container_width=True):
-            st.session_state.selected_vignette_for_session = vignette
-            st.session_state.show_vignette_detail = False
-            st.success(f"Ready to add '{vignette['title']}' to session!")
-            st.rerun()
-    
-    with col2:
-        if st.button("✏️ Edit", use_container_width=True):
-            on_vignette_edit(vignette['id'])
-    
-    with col3:
-        if st.button("🗑️ Delete", type="secondary", use_container_width=True):
-            # Confirm delete
-            if 'confirm_delete' not in st.session_state:
-                st.session_state.confirm_delete = vignette['id']
-                st.warning(f"Are you sure you want to delete '{vignette['title']}'?")
-                
-                col_confirm, col_cancel = st.columns(2)
-                with col_confirm:
-                    if st.button("✅ Yes, Delete", type="primary"):
-                        on_vignette_delete(vignette['id'])
-                with col_cancel:
-                    if st.button("❌ Cancel"):
-                        st.session_state.confirm_delete = None
-                        st.rerun()
-            else:
-                st.session_state.confirm_delete = None
-    
-    # Publish button for drafts
-    if vignette.get('is_draft'):
-        st.divider()
-        if st.button("🚀 Publish This Story", type="primary", use_container_width=True):
-            if st.session_state.vignette_manager.publish_vignette(vignette['id']):
-                st.success("Published!")
-                st.rerun()
+    # Display full vignette - NO ADD TO SESSION BUTTON
+    st.session_state.vignette_manager.display_full_vignette(
+        st.session_state.selected_vignette_id,
+        on_back=lambda: st.session_state.update(show_vignette_detail=False, selected_vignette_id=None),
+        on_edit=on_vignette_edit
+    )
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1029,7 +965,7 @@ default_state = {
     "editing_bank_name": None,
     "qb_manager": None,
     "qb_manager_initialized": False,
-    "confirm_delete": None  # Added for vignette delete confirmation
+    "confirm_delete": None
 }
 
 for key, value in default_state.items():
