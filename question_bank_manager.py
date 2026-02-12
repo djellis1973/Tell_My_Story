@@ -1,4 +1,4 @@
-# question_bank_manager.py - PRODUCTION VERSION
+# question_bank_manager.py - PRODUCTION VERSION WITH WORKING CUSTOM BANKS
 import streamlit as st
 import pandas as pd
 import json
@@ -84,7 +84,7 @@ class QuestionBankManager:
             return self.load_sessions_from_csv(filename)
         return []
     
-    # ============ CUSTOM BANK METHODS ============
+    # ============ CUSTOM BANK METHODS - FULLY WORKING ============
     
     def get_user_banks(self):
         """Get all custom banks for the current user"""
@@ -122,6 +122,7 @@ class QuestionBankManager:
         if copy_from:
             sessions = self.load_default_bank(copy_from)
         
+        # Save bank file
         bank_file = f"{user_dir}/{bank_id}.json"
         with open(bank_file, 'w') as f:
             json.dump({
@@ -133,6 +134,7 @@ class QuestionBankManager:
                 'sessions': sessions
             }, f, indent=2)
         
+        # Update catalog
         banks = self.get_user_banks()
         banks.append({
             'id': bank_id,
@@ -174,6 +176,54 @@ class QuestionBankManager:
         self._save_user_banks(banks)
         
         return True
+    
+    def export_user_bank_to_csv(self, bank_id):
+        """Export custom bank to CSV for download - MAKE IT PERMANENT"""
+        sessions = self.load_user_bank(bank_id)
+        
+        rows = []
+        for session in sessions:
+            for i, q in enumerate(session.get('questions', [])):
+                rows.append({
+                    'session_id': session['id'],
+                    'title': session['title'],
+                    'guidance': session.get('guidance', '') if i == 0 else '',
+                    'question': q,
+                    'word_target': session.get('word_target', 500)
+                })
+        
+        if rows:
+            df = pd.DataFrame(rows)
+            return df.to_csv(index=False)
+        return None
+    
+    def save_user_bank(self, bank_id, sessions):
+        """Save changes to a custom bank"""
+        if not self.user_id:
+            return False
+        
+        bank_file = f"{self.user_banks_path}/{self.user_id}/{bank_id}.json"
+        
+        if os.path.exists(bank_file):
+            with open(bank_file, 'r') as f:
+                data = json.load(f)
+            data['sessions'] = sessions
+            data['updated_at'] = datetime.now().isoformat()
+            with open(bank_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            
+            # Update catalog
+            banks = self.get_user_banks()
+            for bank in banks:
+                if bank['id'] == bank_id:
+                    bank['updated_at'] = datetime.now().isoformat()
+                    bank['session_count'] = len(sessions)
+                    bank['topic_count'] = sum(len(s.get('questions', [])) for s in sessions)
+                    break
+            self._save_user_banks(banks)
+            
+            return True
+        return False
     
     # ============ UI METHODS ============
     
@@ -248,7 +298,7 @@ class QuestionBankManager:
                                 st.rerun()
     
     def _display_my_banks(self):
-        """Display user's custom banks"""
+        """Display user's custom banks - FULLY WORKING"""
         banks = self.get_user_banks()
         
         if not banks:
@@ -306,9 +356,19 @@ class QuestionBankManager:
                         st.rerun()
                 
                 with col3:
-                    if st.button("📋 Export", key=f"export_user_{bank['id']}", 
-                               use_container_width=True):
-                        self._export_bank(bank['id'])
+                    # EXPORT TO CSV - MAKE IT PERMANENT
+                    csv_data = self.export_user_bank_to_csv(bank['id'])
+                    if csv_data:
+                        st.download_button(
+                            label="📥 Save as CSV",
+                            data=csv_data,
+                            file_name=f"{bank['name'].replace(' ', '_')}.csv",
+                            mime="text/csv",
+                            key=f"download_{bank['id']}",
+                            use_container_width=True
+                        )
+                    else:
+                        st.button("📥 No Data", disabled=True, use_container_width=True)
                 
                 with col4:
                     if st.button("🗑️ Delete", key=f"delete_user_{bank['id']}", 
@@ -345,36 +405,6 @@ class QuestionBankManager:
                     st.rerun()
                 else:
                     st.error("❌ Please enter a bank name")
-    
-    def _export_bank(self, bank_id):
-        """Export bank to CSV"""
-        sessions = self.load_user_bank(bank_id)
-        
-        rows = []
-        for session in sessions:
-            for i, q in enumerate(session.get('questions', [])):
-                rows.append({
-                    'session_id': session['id'],
-                    'title': session['title'],
-                    'guidance': session.get('guidance', '') if i == 0 else '',
-                    'question': q,
-                    'word_target': session.get('word_target', 500)
-                })
-        
-        if rows:
-            df = pd.DataFrame(rows)
-            csv = df.to_csv(index=False)
-            
-            banks = self.get_user_banks()
-            bank_name = next((b['name'] for b in banks if b['id'] == bank_id), 'bank')
-            
-            st.download_button(
-                label="📥 Download CSV",
-                data=csv,
-                file_name=f"{bank_name.replace(' ', '_')}.csv",
-                mime="text/csv",
-                key=f"download_{bank_id}"
-            )
     
     def display_bank_editor(self, bank_id):
         """Display the bank editor interface"""
@@ -508,30 +538,3 @@ class QuestionBankManager:
         if st.button("🔙 Back to Bank Manager", use_container_width=True):
             st.session_state.show_bank_editor = False
             st.rerun()
-    
-    def save_user_bank(self, bank_id, sessions):
-        """Save changes to a custom bank"""
-        if not self.user_id:
-            return False
-        
-        bank_file = f"{self.user_banks_path}/{self.user_id}/{bank_id}.json"
-        
-        if os.path.exists(bank_file):
-            with open(bank_file, 'r') as f:
-                data = json.load(f)
-            data['sessions'] = sessions
-            data['updated_at'] = datetime.now().isoformat()
-            with open(bank_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            
-            banks = self.get_user_banks()
-            for bank in banks:
-                if bank['id'] == bank_id:
-                    bank['updated_at'] = datetime.now().isoformat()
-                    bank['session_count'] = len(sessions)
-                    bank['topic_count'] = sum(len(s.get('questions', [])) for s in sessions)
-                    break
-            self._save_user_banks(banks)
-            
-            return True
-        return False
