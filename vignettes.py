@@ -1,9 +1,10 @@
-# vignettes.py - COMPLETE WORKING VERSION
+# vignettes.py - COMPLETE WORKING VERSION WITH ALL FIXES
 import streamlit as st
 import json
 from datetime import datetime
 import os
 import uuid
+import time  # ADDED FOR SUCCESS MESSAGES
 
 class VignetteManager:
     def __init__(self, user_id):
@@ -124,7 +125,9 @@ class VignetteManager:
                     self.update_vignette(edit_vignette["id"], title, content, theme)
                     st.success("✅ Vignette saved successfully!")
                     st.balloons()
+                    time.sleep(1)  # FIX: Show success message before rerun
                     st.session_state.show_vignette_modal = False
+                    st.session_state.show_vignette_manager = True  # FIX: Return to gallery
                     st.session_state.editing_vignette_id = None
                     st.rerun()
                     return True
@@ -154,7 +157,9 @@ class VignetteManager:
                             on_publish(v)
                         st.success("🎉 Your vignette has been published!")
                         st.balloons()
+                        time.sleep(1)  # FIX: Show success message before rerun
                         st.session_state.show_vignette_modal = False
+                        st.session_state.show_vignette_manager = True  # FIX: Return to gallery
                         st.rerun()
                         return True
                     else:
@@ -165,7 +170,9 @@ class VignetteManager:
                         title = title if title else "Untitled Draft"
                         self.create_vignette(title, content, theme, is_draft=True)
                         st.success("💾 Draft saved successfully!")
+                        time.sleep(1)  # FIX: Show success message before rerun
                         st.session_state.show_vignette_modal = False
+                        st.session_state.show_vignette_manager = True  # FIX: Return to gallery
                         st.rerun()
                         return True
                     else:
@@ -257,4 +264,5 @@ class VignetteManager:
                 self.publish_vignette(v['id'])
                 st.success("✅ Vignette published successfully!")
                 st.balloons()
+                time.sleep(1)  # FIX: Show success message before rerun
                 st.rerun()
