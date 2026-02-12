@@ -1,35 +1,21 @@
-# vignettes.py - COMPLETE WORKING VERSION WITH ALL FIXES
+# vignettes.py - ULTRA SIMPLE VERSION
 import streamlit as st
 import json
 from datetime import datetime
 import os
 import uuid
-import time
 
 class VignetteManager:
     def __init__(self, user_id):
         self.user_id = user_id
         self.file = f"user_vignettes/{user_id}_vignettes.json"
         os.makedirs("user_vignettes", exist_ok=True)
-        
         self.standard_themes = [
-            "Life Lesson",
-            "Achievement",
-            "Work Experience",
-            "Loss of Life",
-            "Illness",
-            "New Child",
-            "Marriage",
-            "Travel",
-            "Relationship",
-            "Interests",
-            "Education",
-            "Childhood Memory",
-            "Family Story",
-            "Career Moment",
-            "Personal Growth"
+            "Life Lesson", "Achievement", "Work Experience", "Loss of Life",
+            "Illness", "New Child", "Marriage", "Travel", "Relationship",
+            "Interests", "Education", "Childhood Memory", "Family Story",
+            "Career Moment", "Personal Growth"
         ]
-        
         self._load()
     
     def _load(self):
@@ -44,10 +30,10 @@ class VignetteManager:
     
     def _save(self):
         with open(self.file, 'w') as f:
-            json.dump(self.vignettes, f, indent=2)
+            json.dump(self.vignettes, f)
     
     def create_vignette(self, title, content, theme, is_draft=False):
-        vignette = {
+        v = {
             "id": str(uuid.uuid4())[:8],
             "title": title,
             "content": content,
@@ -58,18 +44,15 @@ class VignetteManager:
             "is_draft": is_draft,
             "is_published": not is_draft
         }
-        self.vignettes.append(vignette)
+        self.vignettes.append(v)
         self._save()
-        return vignette
+        return v
     
     def update_vignette(self, id, title, content, theme):
         for v in self.vignettes:
             if v["id"] == id:
-                v["title"] = title
-                v["content"] = content
-                v["theme"] = theme
-                v["word_count"] = len(content.split())
-                v["updated_at"] = datetime.now().isoformat()
+                v.update({"title": title, "content": content, "theme": theme, 
+                         "word_count": len(content.split()), "updated_at": datetime.now().isoformat()})
                 self._save()
                 return True
         return False
@@ -79,190 +62,105 @@ class VignetteManager:
         self._save()
         return True
     
-    def publish_vignette(self, id):
-        for v in self.vignettes:
-            if v["id"] == id:
-                v["is_draft"] = False
-                v["is_published"] = True
-                v["published_at"] = datetime.now().isoformat()
-                self._save()
-                return True
-        return False
-    
     def get_vignette_by_id(self, id):
         for v in self.vignettes:
             if v["id"] == id:
                 return v
         return None
     
-    def get_all_vignettes(self):
-        return self.vignettes
-    
     def display_vignette_creator(self, on_publish=None, edit_vignette=None):
         if edit_vignette:
-            st.subheader("✏️ Edit Vignette")
-            
-            initial_theme = edit_vignette.get("theme", "")
-            theme_index = 0
-            if initial_theme in self.standard_themes:
-                theme_index = self.standard_themes.index(initial_theme)
-            else:
-                theme_index = len(self.standard_themes)
-            
-            theme_options = self.standard_themes + ["Custom Theme"]
-            selected_theme = st.selectbox("Theme", theme_options, index=theme_index)
-            
-            if selected_theme == "Custom Theme":
-                theme = st.text_input("Custom Theme", value=initial_theme if initial_theme not in self.standard_themes else "")
-            else:
-                theme = selected_theme
-            
-            title = st.text_input("Title", value=edit_vignette.get("title", ""))
-            content = st.text_area("Story", value=edit_vignette.get("content", ""), height=300)
-            
-            if st.button("💾 Save Changes", type="primary"):
+            st.subheader("Edit Vignette")
+            theme = st.text_input("Theme", edit_vignette.get("theme", ""))
+            title = st.text_input("Title", edit_vignette.get("title", ""))
+            content = st.text_area("Story", edit_vignette.get("content", ""), height=300)
+            if st.button("Save Changes"):
                 if title and content:
                     self.update_vignette(edit_vignette["id"], title, content, theme)
-                    st.success("✅ Vignette saved successfully!")
-                    st.balloons()
-                    time.sleep(1)
+                    st.session_state.edit_success = True
                     st.session_state.show_vignette_modal = False
                     st.session_state.show_vignette_manager = True
-                    st.session_state.editing_vignette_id = None
                     st.rerun()
-                    return True
         else:
-            st.subheader("✍️ Create New Vignette")
-            
-            selected_theme = st.selectbox("Theme", self.standard_themes + ["Custom Theme"])
-            
-            if selected_theme == "Custom Theme":
+            st.subheader("New Vignette")
+            theme = st.selectbox("Theme", self.standard_themes + ["Custom"])
+            if theme == "Custom":
                 theme = st.text_input("Custom Theme")
-            else:
-                theme = selected_theme
-            
-            title = st.text_input("Title", placeholder="Give your story a title...")
-            content = st.text_area("Story", height=300, placeholder="Write your story here...")
-            
-            if content:
-                word_count = len(content.split())
-                st.caption(f"📝 {word_count} words")
-            
+            title = st.text_input("Title")
+            content = st.text_area("Story", height=300)
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🚀 Publish", type="primary", use_container_width=True):
+                if st.button("Publish"):
                     if title and content:
-                        v = self.create_vignette(title, content, theme, is_draft=False)
-                        if on_publish:
-                            on_publish(v)
-                        st.success("🎉 Your vignette has been published!")
-                        st.balloons()
-                        time.sleep(1)
+                        self.create_vignette(title, content, theme, False)
+                        st.session_state.publish_success = True
                         st.session_state.show_vignette_modal = False
                         st.session_state.show_vignette_manager = True
                         st.rerun()
-                        return True
-                    else:
-                        st.warning("⚠️ Please add a title and story content")
             with col2:
-                if st.button("💾 Save as Draft", use_container_width=True):
+                if st.button("Save Draft"):
                     if content:
-                        title = title if title else "Untitled Draft"
-                        self.create_vignette(title, content, theme, is_draft=True)
-                        st.success("💾 Draft saved successfully!")
-                        time.sleep(1)
+                        title = title or "Untitled"
+                        self.create_vignette(title, content, theme, True)
+                        st.session_state.draft_success = True
                         st.session_state.show_vignette_modal = False
                         st.session_state.show_vignette_manager = True
                         st.rerun()
-                        return True
-                    else:
-                        st.warning("⚠️ Cannot save an empty story")
-        return False
     
     def display_vignette_gallery(self, filter_by="all", on_select=None, on_edit=None, on_delete=None):
         if filter_by == "published":
-            vignettes = [v for v in self.vignettes if v.get("is_published")]
+            vs = [v for v in self.vignettes if v.get("is_published")]
         elif filter_by == "drafts":
-            vignettes = [v for v in self.vignettes if v.get("is_draft")]
+            vs = [v for v in self.vignettes if v.get("is_draft")]
         else:
-            vignettes = self.vignettes
+            vs = self.vignettes
         
-        if not vignettes:
-            if filter_by == "published":
-                st.info("📭 No published vignettes yet.")
-            elif filter_by == "drafts":
-                st.info("📭 No drafts yet.")
-            else:
-                st.info("📭 No vignettes yet.")
+        if st.session_state.get("publish_success"):
+            st.success("🎉 Published!")
+            del st.session_state.publish_success
+        if st.session_state.get("draft_success"):
+            st.success("💾 Draft saved!")
+            del st.session_state.draft_success
+        if st.session_state.get("edit_success"):
+            st.success("✅ Saved!")
+            del st.session_state.edit_success
+        if st.session_state.get("delete_success"):
+            st.success("🗑️ Deleted!")
+            del st.session_state.delete_success
+        
+        if not vs:
+            st.info("No vignettes yet.")
             return
         
-        for v in vignettes:
-            with st.container():
-                st.markdown(f"### {v['title']}")
-                st.markdown(f"**Theme:** {v['theme']}")
-                st.markdown(v['content'][:150] + "..." if len(v['content']) > 150 else v['content'])
-                st.markdown(f"📝 {v['word_count']} words")
-                st.markdown(f"**{'✅ Published' if v.get('is_published') else '📝 Draft'}**")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    if st.button("📖 Read", key=f"read_{v['id']}", use_container_width=True):
-                        if on_select:
-                            on_select(v['id'])
-                with col2:
-                    if st.button("✏️ Edit", key=f"edit_{v['id']}", use_container_width=True):
-                        if on_edit:
-                            on_edit(v['id'])
-                with col3:
-                    if st.button("🗑️ Delete", key=f"delete_{v['id']}", use_container_width=True):
-                        if on_delete:
-                            on_delete(v['id'])
-                st.divider()
+        for v in vs:
+            st.markdown(f"### {v['title']}")
+            st.markdown(f"*{v['theme']}*")
+            st.markdown(v['content'][:150] + "...")
+            st.markdown(f"📝 {v['word_count']} words")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("Read", key=f"r_{v['id']}"):
+                    on_select(v['id'])
+            with col2:
+                if st.button("Edit", key=f"e_{v['id']}"):
+                    on_edit(v['id'])
+            with col3:
+                if st.button("Delete", key=f"d_{v['id']}"):
+                    self.delete_vignette(v['id'])
+                    st.session_state.delete_success = True
+                    st.rerun()
+            st.divider()
     
-    def display_full_vignette(self, vignette_id, on_back=None, on_edit=None):
-        v = self.get_vignette_by_id(vignette_id)
+    def display_full_vignette(self, id, on_back=None, on_edit=None):
+        v = self.get_vignette_by_id(id)
         if not v:
-            st.error("Vignette not found")
             return
-        
-        if st.button("← Back to Vignettes"):
-            if on_back:
-                on_back()
-            st.rerun()
-        
+        if st.button("← Back"):
+            on_back()
         st.title(v['title'])
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"**Theme:** {v['theme']}")
-        with col2:
-            st.markdown(f"**Words:** {v['word_count']}")
-        
-        if v.get('is_published'):
-            st.markdown(f"**Published:** {v.get('published_at', v['created_at'])[:10]}")
-        else:
-            st.markdown(f"**Created:** {v['created_at'][:10]}")
-        
+        st.markdown(f"**Theme:** {v['theme']}  |  **Words:** {v['word_count']}")
         st.markdown("---")
         st.write(v['content'])
         st.markdown("---")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("✏️ Edit Story", use_container_width=True):
-                if on_edit:
-                    on_edit(v['id'])
-        with col2:
-            if st.button("📋 Back to Gallery", use_container_width=True):
-                if on_back:
-                    on_back()
-                st.rerun()
-        
-        if v.get('is_draft'):
-            st.divider()
-            if st.button("🚀 Publish Story", type="primary", use_container_width=True):
-                self.publish_vignette(v['id'])
-                st.success("✅ Vignette published successfully!")
-                st.balloons()
-                time.sleep(1)
-                st.rerun()
+        if st.button("Edit"):
+            on_edit(v['id'])
