@@ -1,70 +1,30 @@
-# question_bank_manager.py - WORKING VERSION WITH ONLY THE FIXES YOU REQUESTED
+# question_bank_manager.py - COMPLETE FIXED VERSION
 import streamlit as st
 import pandas as pd
 import json
 import os
 import shutil
 from datetime import datetime
-from typing import Dict, List, Optional
 import uuid
 
 class QuestionBankManager:
-    def __init__(self, user_id: str = None):
+    def __init__(self, user_id=None):
         self.user_id = user_id
         self.base_path = "question_banks"
         self.default_banks_path = f"{self.base_path}/default"
         self.user_banks_path = f"{self.base_path}/users"
-        self.default_banks_catalog_file = f"{self.base_path}/default_banks_catalog.json"
         
-        # Create directories
+        # FIX 1: Create ALL directories immediately
         os.makedirs(self.default_banks_path, exist_ok=True)
+        os.makedirs(self.user_banks_path, exist_ok=True)
         if self.user_id:
             os.makedirs(f"{self.user_banks_path}/{self.user_id}", exist_ok=True)
-        os.makedirs(self.base_path, exist_ok=True)
         
-        self._init_default_catalog()
-        self._ensure_default_banks_exist()
+        self._init_default_banks()
     
-    def _init_default_catalog(self):
-        """Initialize the default banks catalog"""
-        if os.path.exists(self.default_banks_catalog_file):
-            with open(self.default_banks_catalog_file, 'r') as f:
-                self.default_catalog = json.load(f)
-        else:
-            self.default_catalog = {
-                "banks": [
-                    {
-                        "id": "life_story_comprehensive",
-                        "name": "📖 Life Story - Comprehensive",
-                        "filename": "life_story_comprehensive.csv",
-                        "description": "Complete life story journey through 13 sessions",
-                        "sessions": 13,
-                        "topics": 71
-                    },
-                    {
-                        "id": "quick_memories",
-                        "name": "✨ Quick Memories - 5 Sessions",
-                        "filename": "quick_memories.csv",
-                        "description": "Shorter version focusing on key life moments",
-                        "sessions": 5,
-                        "topics": 25
-                    },
-                    {
-                        "id": "family_heritage",
-                        "name": "🏠 Family Heritage Focus",
-                        "filename": "family_heritage.csv",
-                        "description": "Deep dive into family history and traditions",
-                        "sessions": 8,
-                        "topics": 40
-                    }
-                ]
-            }
-            with open(self.default_banks_catalog_file, 'w') as f:
-                json.dump(self.default_catalog, f, indent=2)
-    
-    def _ensure_default_banks_exist(self):
-        """Create default bank files if they don't exist"""
-        # Copy existing sessions.csv if it exists
+    def _init_default_banks(self):
+        """Initialize default banks"""
+        # Copy sessions.csv if it exists
         if os.path.exists("sessions/sessions.csv"):
             dest = f"{self.default_banks_path}/life_story_comprehensive.csv"
             if not os.path.exists(dest):
@@ -111,7 +71,6 @@ class QuestionBankManager:
         try:
             df = pd.read_csv(csv_path)
             sessions = []
-            current_session = None
             
             for _, row in df.iterrows():
                 session_id = int(row['session_id'])
@@ -137,16 +96,42 @@ class QuestionBankManager:
     
     def get_default_banks(self):
         """Get list of default banks"""
-        return self.default_catalog['banks']
+        return [
+            {
+                "id": "life_story_comprehensive",
+                "name": "📖 Life Story - Comprehensive",
+                "description": "Complete life story journey through 13 sessions",
+                "sessions": 13,
+                "topics": 71
+            },
+            {
+                "id": "quick_memories",
+                "name": "✨ Quick Memories - 5 Sessions",
+                "description": "Shorter version focusing on key life moments",
+                "sessions": 5,
+                "topics": 25
+            },
+            {
+                "id": "family_heritage",
+                "name": "🏠 Family Heritage Focus",
+                "description": "Deep dive into family history and traditions",
+                "sessions": 8,
+                "topics": 40
+            }
+        ]
     
     def load_default_bank(self, bank_id):
         """Load a default bank by ID"""
-        for bank in self.default_catalog['banks']:
-            if bank['id'] == bank_id:
-                filepath = f"{self.default_banks_path}/{bank['filename']}"
-                if os.path.exists(filepath):
-                    sessions = self.load_sessions_from_csv(filepath)
-                    return sessions
+        filename = f"{self.default_banks_path}/{bank_id}.csv"
+        if bank_id == "life_story_comprehensive":
+            filename = f"{self.default_banks_path}/life_story_comprehensive.csv"
+        elif bank_id == "quick_memories":
+            filename = f"{self.default_banks_path}/quick_memories.csv"
+        elif bank_id == "family_heritage":
+            filename = f"{self.default_banks_path}/family_heritage.csv"
+        
+        if os.path.exists(filename):
+            return self.load_sessions_from_csv(filename)
         return []
     
     # ============ CUSTOM BANK METHODS ============
@@ -172,10 +157,14 @@ class QuestionBankManager:
             json.dump(banks, f, indent=2)
     
     def create_custom_bank(self, name, description="", copy_from=None):
-        """Create a new custom bank"""
+        """Create a new custom bank - FIXED VERSION"""
         if not self.user_id:
             st.error("You must be logged in")
             return None
+        
+        # FIX: Ensure user directory exists before saving
+        user_dir = f"{self.user_banks_path}/{self.user_id}"
+        os.makedirs(user_dir, exist_ok=True)
         
         bank_id = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
@@ -185,9 +174,8 @@ class QuestionBankManager:
         if copy_from:
             sessions = self.load_default_bank(copy_from)
         
-        # Create bank file
-        os.makedirs(f"{self.user_banks_path}/{self.user_id}", exist_ok=True)
-        bank_file = f"{self.user_banks_path}/{self.user_id}/{bank_id}.json"
+        # Save bank file
+        bank_file = f"{user_dir}/{bank_id}.json"
         with open(bank_file, 'w') as f:
             json.dump({
                 'id': bank_id,
@@ -211,6 +199,7 @@ class QuestionBankManager:
         })
         self._save_user_banks(banks)
         
+        st.success(f"✅ Bank '{name}' created successfully!")
         return bank_id
     
     def load_user_bank(self, bank_id):
@@ -224,34 +213,6 @@ class QuestionBankManager:
                 data = json.load(f)
                 return data.get('sessions', [])
         return []
-    
-    def save_user_bank(self, bank_id, sessions):
-        """Save changes to a custom bank"""
-        if not self.user_id:
-            return False
-        
-        bank_file = f"{self.user_banks_path}/{self.user_id}/{bank_id}.json"
-        
-        if os.path.exists(bank_file):
-            with open(bank_file, 'r') as f:
-                data = json.load(f)
-            data['sessions'] = sessions
-            data['updated_at'] = datetime.now().isoformat()
-            with open(bank_file, 'w') as f:
-                json.dump(data, f, indent=2)
-            
-            # Update catalog
-            banks = self.get_user_banks()
-            for bank in banks:
-                if bank['id'] == bank_id:
-                    bank['updated_at'] = datetime.now().isoformat()
-                    bank['session_count'] = len(sessions)
-                    bank['topic_count'] = sum(len(s.get('questions', [])) for s in sessions)
-                    break
-            self._save_user_banks(banks)
-            
-            return True
-        return False
     
     def delete_user_bank(self, bank_id):
         """Delete a custom bank"""
@@ -268,7 +229,7 @@ class QuestionBankManager:
         
         return True
     
-    # ============ UI METHODS - ORIGINAL LAYOUT PRESERVED ============
+    # ============ UI METHODS ============
     
     def display_bank_selector(self):
         """Main UI for bank selection"""
@@ -295,7 +256,7 @@ class QuestionBankManager:
         """Display default banks with load buttons - ORIGINAL GRID LAYOUT"""
         banks = self.get_default_banks()
         
-        # ORIGINAL 2-COLUMN GRID
+        # 2-COLUMN GRID - EXACTLY AS ORIGINAL
         cols = st.columns(2)
         for i, bank in enumerate(banks):
             with cols[i % 2]:
@@ -317,7 +278,7 @@ class QuestionBankManager:
                             st.session_state.current_bank_type = "default"
                             st.session_state.current_bank_id = bank['id']
                             
-                            # FIX 1: Add success message
+                            # FIX: ADD SUCCESS MESSAGE HERE
                             st.success(f"✅ Loaded '{bank['name']}'")
                             
                             # Initialize responses
@@ -364,7 +325,7 @@ class QuestionBankManager:
                             st.session_state.current_bank_type = "custom"
                             st.session_state.current_bank_id = bank['id']
                             
-                            # FIX 3: Add success message
+                            # FIX: ADD SUCCESS MESSAGE HERE
                             st.success(f"✅ Loaded '{bank['name']}'")
                             
                             # Initialize responses
@@ -401,7 +362,7 @@ class QuestionBankManager:
                             st.rerun()
     
     def _display_create_bank_form(self):
-        """Display form to create new bank - FIXED to actually work"""
+        """Display form to create new bank - FIXED VERSION"""
         st.markdown("### Create New Question Bank")
         
         with st.form("create_bank_form"):
@@ -424,45 +385,7 @@ class QuestionBankManager:
                                 copy_from = bank['id']
                                 break
                     
-                    # FIX 2: Create the bank directly here
-                    bank_id = str(uuid.uuid4())[:8]
-                    now = datetime.now().isoformat()
-                    
-                    # Get sessions to copy
-                    sessions = []
-                    if copy_from:
-                        sessions = self.load_default_bank(copy_from)
-                    
-                    # Create bank file
-                    os.makedirs(f"{self.user_banks_path}/{self.user_id}", exist_ok=True)
-                    bank_file = f"{self.user_banks_path}/{self.user_id}/{bank_id}.json"
-                    with open(bank_file, 'w') as f:
-                        json.dump({
-                            'id': bank_id,
-                            'name': name,
-                            'description': description,
-                            'created_at': now,
-                            'updated_at': now,
-                            'sessions': sessions
-                        }, f, indent=2)
-                    
-                    # Update catalog
-                    banks = self.get_user_banks()
-                    banks.append({
-                        'id': bank_id,
-                        'name': name,
-                        'description': description,
-                        'created_at': now,
-                        'updated_at': now,
-                        'session_count': len(sessions),
-                        'topic_count': sum(len(s.get('questions', [])) for s in sessions)
-                    })
-                    
-                    catalog_file = f"{self.user_banks_path}/{self.user_id}/catalog.json"
-                    with open(catalog_file, 'w') as f:
-                        json.dump(banks, f, indent=2)
-                    
-                    st.success(f"✅ Bank '{name}' created successfully!")
+                    self.create_custom_bank(name, description, copy_from)
                     st.rerun()
                 else:
                     st.error("❌ Please enter a bank name")
@@ -629,3 +552,31 @@ class QuestionBankManager:
         if st.button("🔙 Back to Bank Manager", use_container_width=True):
             st.session_state.show_bank_editor = False
             st.rerun()
+    
+    def save_user_bank(self, bank_id, sessions):
+        """Save changes to a custom bank"""
+        if not self.user_id:
+            return False
+        
+        bank_file = f"{self.user_banks_path}/{self.user_id}/{bank_id}.json"
+        
+        if os.path.exists(bank_file):
+            with open(bank_file, 'r') as f:
+                data = json.load(f)
+            data['sessions'] = sessions
+            data['updated_at'] = datetime.now().isoformat()
+            with open(bank_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            
+            # Update catalog
+            banks = self.get_user_banks()
+            for bank in banks:
+                if bank['id'] == bank_id:
+                    bank['updated_at'] = datetime.now().isoformat()
+                    bank['session_count'] = len(sessions)
+                    bank['topic_count'] = sum(len(s.get('questions', [])) for s in sessions)
+                    break
+            self._save_user_banks(banks)
+            
+            return True
+        return False
