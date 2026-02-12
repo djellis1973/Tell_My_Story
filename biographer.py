@@ -14,6 +14,18 @@ import string
 import time
 
 # ============================================================================
+# FORCE DIRECTORY CREATION - ADD THIS RIGHT AFTER IMPORTS
+# ============================================================================
+
+# Ensure directories exist immediately
+try:
+    os.makedirs("question_banks/default", exist_ok=True)
+    os.makedirs("question_banks/users", exist_ok=True)
+    os.makedirs("question_banks", exist_ok=True)
+except Exception as e:
+    pass
+
+# ============================================================================
 # IMPORTS
 # ============================================================================
 
@@ -45,8 +57,11 @@ client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_
 # Initialize BetaReader
 beta_reader = BetaReader(client) if BetaReader else None
 
-# Initialize QuestionBankManager (will be recreated after login)
-qb_manager = None
+# Initialize QuestionBankManager in session state
+if 'qb_manager' not in st.session_state:
+    st.session_state.qb_manager = None
+if 'qb_manager_initialized' not in st.session_state:
+    st.session_state.qb_manager_initialized = False
 
 # Load external CSS
 try:
@@ -238,7 +253,7 @@ def logout_user():
         'show_beta_reader', 'current_beta_feedback',
         'current_question_bank', 'current_bank_name', 'current_bank_type',
         'current_bank_id', 'show_bank_manager', 'show_bank_editor',
-        'editing_bank_id', 'editing_bank_name'
+        'editing_bank_id', 'editing_bank_name', 'qb_manager', 'qb_manager_initialized'
     ]
     for key in keys:
         st.session_state.pop(key, None)
@@ -412,6 +427,76 @@ def auto_correct_text(text):
         return response.choices[0].message.content
     except:
         return text
+
+# ============================================================================
+# QUESTION BANK LOADING - FIXED VERSION
+# ============================================================================
+
+# THIS REPLACES THE OLD SESSIONS LOADING SECTION
+if 'current_question_bank' not in st.session_state or st.session_state.current_question_bank is None:
+    
+    # Try to use QuestionBankManager first
+    if QuestionBankManager:
+        try:
+            # Create directories explicitly
+            os.makedirs("question_banks/default", exist_ok=True)
+            os.makedirs("question_banks/users", exist_ok=True)
+            
+            # Initialize with user_id if logged in, otherwise None
+            user_id = st.session_state.get('user_id', None)
+            qb_manager = QuestionBankManager(user_id)
+            st.session_state.qb_manager = qb_manager
+            
+            # Check if sessions.csv exists and copy it to the default banks
+            if os.path.exists("sessions/sessions.csv"):
+                import shutil
+                dest_path = "question_banks/default/life_story_comprehensive.csv"
+                if not os.path.exists(dest_path):
+                    shutil.copy("sessions/sessions.csv", dest_path)
+            
+            # Load default bank
+            default_sessions = qb_manager.load_default_bank("life_story_comprehensive")
+            
+            if default_sessions and len(default_sessions) > 0:
+                # Load the bank into session state
+                st.session_state.current_question_bank = default_sessions
+                st.session_state.current_bank_name = "📖 Life Story - Comprehensive"
+                st.session_state.current_bank_type = "default"
+                st.session_state.current_bank_id = "life_story_comprehensive"
+                st.session_state.qb_manager_initialized = True
+            else:
+                # Fallback to SessionLoader
+                if SessionLoader:
+                    session_loader = SessionLoader()
+                    legacy_sessions = session_loader.load_sessions_from_csv()
+                    if legacy_sessions:
+                        st.session_state.current_question_bank = legacy_sessions
+                        st.session_state.current_bank_name = "Legacy Bank"
+                        st.session_state.current_bank_type = "legacy"
+                        st.session_state.qb_manager_initialized = True
+                
+        except Exception as e:
+            # Fallback to original SessionLoader
+            if SessionLoader:
+                session_loader = SessionLoader()
+                legacy_sessions = session_loader.load_sessions_from_csv()
+                if legacy_sessions:
+                    st.session_state.current_question_bank = legacy_sessions
+                    st.session_state.current_bank_name = "Legacy Bank"
+                    st.session_state.current_bank_type = "legacy"
+                    st.session_state.qb_manager_initialized = True
+    else:
+        # Original fallback
+        if SessionLoader:
+            session_loader = SessionLoader()
+            legacy_sessions = session_loader.load_sessions_from_csv()
+            if legacy_sessions:
+                st.session_state.current_question_bank = legacy_sessions
+                st.session_state.current_bank_name = "Legacy Bank"
+                st.session_state.current_bank_type = "legacy"
+
+# Set SESSIONS from session state for compatibility
+SESSIONS = st.session_state.get('current_question_bank', [])
 
 # ============================================================================
 # QUESTION BANK FUNCTIONS
@@ -750,17 +835,17 @@ def show_session_manager():
 
 def show_bank_manager():
     """Display the question bank manager interface"""
-    global qb_manager
     
     if not QuestionBankManager:
         st.error("Question Bank Manager not available")
         st.session_state.show_bank_manager = False
         return
     
-    if not qb_manager and st.session_state.get('user_id'):
-        qb_manager = QuestionBankManager(st.session_state.user_id)
+    # Get or create QB Manager
+    if st.session_state.qb_manager is None and st.session_state.get('user_id'):
+        st.session_state.qb_manager = QuestionBankManager(st.session_state.user_id)
     
-    if not qb_manager:
+    if st.session_state.qb_manager is None:
         st.error("Please log in to manage question banks")
         st.session_state.show_bank_manager = False
         return
@@ -773,29 +858,29 @@ def show_bank_manager():
             st.session_state.show_bank_manager = False
             st.rerun()
     
-    qb_manager.display_bank_selector()
+    st.session_state.qb_manager.display_bank_selector()
     
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_bank_editor():
     """Display the bank editor interface"""
-    global qb_manager
     
     if not QuestionBankManager or not st.session_state.get('editing_bank_id'):
         st.session_state.show_bank_editor = False
         return
     
-    if not qb_manager and st.session_state.get('user_id'):
-        qb_manager = QuestionBankManager(st.session_state.user_id)
+    # Get or create QB Manager
+    if st.session_state.qb_manager is None and st.session_state.get('user_id'):
+        st.session_state.qb_manager = QuestionBankManager(st.session_state.user_id)
     
-    if not qb_manager:
+    if st.session_state.qb_manager is None:
         st.error("Please log in to edit banks")
         st.session_state.show_bank_editor = False
         return
     
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
     
-    qb_manager.display_bank_editor(st.session_state.editing_bank_id)
+    st.session_state.qb_manager.display_bank_editor(st.session_state.editing_bank_id)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -851,6 +936,8 @@ default_state = {
     "show_bank_editor": False,
     "editing_bank_id": None,
     "editing_bank_name": None,
+    "qb_manager": None,
+    "qb_manager_initialized": False
 }
 
 for key, value in default_state.items():
@@ -858,32 +945,9 @@ for key, value in default_state.items():
         st.session_state[key] = value
 
 # ============================================================================
-# INITIALIZE QUESTION BANK
+# LOAD USER DATA
 # ============================================================================
 
-if st.session_state.logged_in and st.session_state.user_id:
-    # Initialize QB Manager with user_id
-    if QuestionBankManager and not qb_manager:
-        qb_manager = QuestionBankManager(st.session_state.user_id)
-    
-    # Load default bank if none is loaded
-    if st.session_state.current_question_bank is None:
-        if qb_manager:
-            # Try to load the user's last used bank from preferences
-            default_sessions = qb_manager.load_default_bank("life_story_comprehensive")
-            if default_sessions:
-                load_question_bank(default_sessions, "📖 Life Story - Comprehensive", "default", "life_story_comprehensive")
-        else:
-            # Fallback to original SessionLoader
-            session_loader = SessionLoader()
-            legacy_sessions = session_loader.load_sessions_from_csv()
-            if legacy_sessions:
-                load_question_bank(legacy_sessions, "Legacy Bank", "legacy")
-
-# Set SESSIONS reference for compatibility
-SESSIONS = st.session_state.get('current_question_bank', [])
-
-# Load user data
 if st.session_state.logged_in and st.session_state.user_id and not st.session_state.data_loaded:
     user_data = load_user_data(st.session_state.user_id)
     if "responses" in user_data:
