@@ -1,4 +1,4 @@
-# question_bank_manager.py - COMPLETE CONTROL VERSION
+# question_bank_manager.py - COMPLETE CONTROL VERSION WITH DEBUGGING
 import streamlit as st
 import pandas as pd
 import json
@@ -221,6 +221,53 @@ class QuestionBankManager:
     def _display_default_banks(self):
         """Display default banks with load buttons - READ ONLY + DOWNLOAD + DELETE"""
         
+        # ============ MEGA DEBUG - SHOW EVERYTHING ============
+        st.error("🔍🔍🔍 DEBUG MODE - SHOWING EVERY PATH 🔍🔍🔍")
+        
+        import os
+        import sys
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**🐍 PYTHON PATHS**")
+            st.write(f"Current working dir: `{os.getcwd()}`")
+            st.write(f"Script dir: `{os.path.dirname(os.path.abspath(__file__))}`")
+            st.write(f"Default banks path: `{os.path.abspath(self.default_banks_path)}`")
+            
+        with col2:
+            st.write("**📁 DIRECTORY CONTENTS**")
+            
+            # Check root
+            st.write("**Root directory:**")
+            root_files = os.listdir(".")
+            csv_in_root = [f for f in root_files if f.endswith('.csv')]
+            st.write(f"CSV files in root: {csv_in_root}")
+            
+            # Check question_banks
+            if os.path.exists("question_banks"):
+                qb_files = os.listdir("question_banks")
+                st.write(f"question_banks/: {qb_files}")
+            else:
+                st.write("question_banks/: ❌ NOT FOUND")
+            
+            # Check question_banks/default
+            if os.path.exists(self.default_banks_path):
+                default_files = os.listdir(self.default_banks_path)
+                st.write(f"{self.default_banks_path}/: {default_files}")
+                
+                # Show full paths
+                st.write("**Full paths:**")
+                for f in default_files:
+                    full_path = os.path.abspath(f"{self.default_banks_path}/{f}")
+                    st.write(f"- `{full_path}`")
+            else:
+                st.write(f"{self.default_banks_path}/: ❌ NOT FOUND")
+        
+        st.error("🔍🔍🔍 END DEBUG 🔍🔍🔍")
+        st.divider()
+        # ============ END DEBUG ============
+        
         # Show what files exist in the cloud
         st.subheader("📁 Files in Cloud Storage")
         
@@ -271,13 +318,17 @@ class QuestionBankManager:
         banks = self.get_default_banks()
         
         if not banks:
-            st.info("📁 No CSV files found. Please upload CSV files to `question_banks/default/` in your GitHub repo.")
-            st.markdown("""
-            **To add default banks:**
-            1. Create CSV files locally with correct format
-            2. Add them to `question_banks/default/` in your GitHub repo
-            3. Commit and push
-            4. Refresh this page
+            st.error("❌ NO CSV FILES FOUND!")
+            st.markdown(f"""
+            **Debug Information:**
+            - Path checked: `{os.path.abspath(self.default_banks_path)}`
+            - Directory exists: {os.path.exists(self.default_banks_path)}
+            
+            **To fix:**
+            1. Make sure your CSV file is in the correct GitHub folder: `question_banks/default/life_story_comprehensive.csv`
+            2. Go to Streamlit Cloud dashboard and click **Reboot**
+            3. Wait 2 minutes and refresh
+            4. If still not working, check file permissions in GitHub
             """)
             return
         
