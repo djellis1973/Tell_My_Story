@@ -1,4 +1,13 @@
-# vignettes.py - COMPLETE WORKING VERSION
+# vignettes.py - COMPLETE FIXED VERSION
+# ALL ISSUES FIXED:
+# ✅ NO Tags field
+# ✅ NO "Add to Session" buttons or functions
+# ✅ Back buttons say "← Back" not just "←"
+# ✅ NO duplicate element keys (all widgets use uuid)
+# ✅ NO syntax errors - all methods properly closed
+# ✅ NO Most Popular filter
+# ✅ NO Views/Likes display
+
 import streamlit as st
 import json
 from datetime import datetime
@@ -171,6 +180,10 @@ class VignetteManager:
         """Get published vignettes"""
         return self.published
     
+    # ============================================
+    # DISPLAY METHODS - FULLY FIXED
+    # ============================================
+    
     def display_vignette_creator(self, on_publish=None, edit_vignette=None):
         """Display vignette creation/editing interface - NO TAGS, NO DUPLICATE KEYS"""
         if edit_vignette:
@@ -268,7 +281,7 @@ class VignetteManager:
                     return True
                 
                 if draft_button and content.strip():
-                    title_to_use = title if title.strip() else f"Draft"
+                    title_to_use = title if title.strip() else "Draft"
                     vignette = self.create_vignette(title_to_use, content, theme, is_draft=True)
                     st.success("💾 Draft saved!")
                     st.rerun()
@@ -277,7 +290,7 @@ class VignetteManager:
             return False
     
     def display_vignette_gallery(self, filter_by: str = "all", on_select=None, on_edit=None, on_delete=None):
-        """Display vignettes in a gallery - NO Most Popular, NO Views/Likes"""
+        """Display vignettes in a gallery - NO Most Popular, NO Views/Likes, NO Add to Session"""
         
         # Filter options - NO Most Popular
         if filter_by == "published":
@@ -306,8 +319,10 @@ class VignetteManager:
                         self._display_vignette_card(vignette, on_select, on_edit, on_delete)
     
     def _display_vignette_card(self, vignette: Dict, on_select=None, on_edit=None, on_delete=None):
-        """Display a single vignette card - NO Views/Likes display"""
-        with st.container():
+        """Display a single vignette card - NO Views/Likes, NO Add to Session"""
+        card_key = f"card_{vignette['id']}_{uuid.uuid4()}"
+        
+        with st.container(key=card_key):
             st.markdown(f"""
             <div style="border:1px solid #ddd; border-radius:5px; padding:10px; margin-bottom:10px;">
                 <div style="display:flex; justify-content:space-between;">
@@ -326,7 +341,7 @@ class VignetteManager:
             </div>
             """, unsafe_allow_html=True)
             
-            # Buttons
+            # Buttons - ONLY Read, Edit, Delete (NO Add to Session)
             col1, col2, col3 = st.columns(3)
             
             with col1:
@@ -345,14 +360,14 @@ class VignetteManager:
                         on_delete(vignette['id'])
     
     def display_full_vignette(self, vignette_id: str, on_back=None, on_edit=None):
-        """Display a full vignette for reading"""
+        """Display a full vignette for reading - NO Add to Session"""
         vignette = self.get_vignette_by_id(vignette_id)
         
         if not vignette:
             st.error("Vignette not found")
             return
         
-        # Back button
+        # Back button - FIXED: says "← Back" not just "←"
         if st.button("← Back", key=f"back_{vignette_id}_{uuid.uuid4()}"):
             if on_back:
                 on_back()
@@ -360,15 +375,27 @@ class VignetteManager:
         # Title
         st.title(vignette['title'])
         
-        # Metadata
-        st.caption(f"Theme: {vignette['theme']} | Words: {vignette['word_count']}")
+        # Metadata - NO Views, NO Likes
+        col1, col2 = st.columns(2)
+        with col1:
+            st.caption(f"Theme: {vignette['theme']}")
+        with col2:
+            st.caption(f"Words: {vignette['word_count']}")
+        
+        # Created/Published date
+        if vignette.get('is_published'):
+            published_date = vignette.get('published_at', vignette.get('created_at', ''))[:10]
+            st.caption(f"Published: {published_date}")
+        else:
+            created_date = vignette.get('created_at', '')[:10]
+            st.caption(f"Created: {created_date}")
         
         # Content
         st.markdown("---")
         st.write(vignette['content'])
         st.markdown("---")
         
-        # Actions
+        # Actions - ONLY Edit and Gallery (NO Add to Session)
         col1, col2 = st.columns(2)
         with col1:
             if st.button("✏️ Edit", key=f"edit_full_{vignette_id}_{uuid.uuid4()}", use_container_width=True):
@@ -378,3 +405,11 @@ class VignetteManager:
             if st.button("📋 Gallery", key=f"gallery_{vignette_id}_{uuid.uuid4()}", use_container_width=True):
                 if on_back:
                     on_back()
+        
+        # Publish button for drafts
+        if vignette.get('is_draft'):
+            st.divider()
+            if st.button("🚀 Publish This Story", key=f"publish_{vignette_id}_{uuid.uuid4()}", type="primary", use_container_width=True):
+                self.publish_vignette(vignette['id'])
+                st.success("Published!")
+                st.rerun()
