@@ -1,4 +1,4 @@
-# biographer.py – Tell My Story App (Full Version with Question Bank Manager)
+# biographer.py – Tell My Story App (FULLY FIXED VERSION)
 import streamlit as st
 import json
 from datetime import datetime, date
@@ -12,17 +12,17 @@ from email.mime.multipart import MIMEMultipart
 import secrets
 import string
 import time
+import shutil
 
 # ============================================================================
-# FORCE DIRECTORY CREATION - ADD THIS RIGHT AFTER IMPORTS
+# FORCE DIRECTORY CREATION - RUN IMMEDIATELY
 # ============================================================================
 
-# Ensure directories exist immediately
 try:
     os.makedirs("question_banks/default", exist_ok=True)
     os.makedirs("question_banks/users", exist_ok=True)
     os.makedirs("question_banks", exist_ok=True)
-except Exception as e:
+except Exception:
     pass
 
 # ============================================================================
@@ -57,11 +57,15 @@ client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_
 # Initialize BetaReader
 beta_reader = BetaReader(client) if BetaReader else None
 
-# Initialize QuestionBankManager in session state
+# Initialize session state for QB Manager
 if 'qb_manager' not in st.session_state:
     st.session_state.qb_manager = None
 if 'qb_manager_initialized' not in st.session_state:
     st.session_state.qb_manager_initialized = False
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = None
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
 
 # Load external CSS
 try:
@@ -240,6 +244,10 @@ def send_welcome_email(user_data, credentials):
         return False
 
 def logout_user():
+    # Clear QB Manager
+    st.session_state.qb_manager = None
+    st.session_state.qb_manager_initialized = False
+    
     keys = [
         'user_id', 'user_account', 'logged_in', 'show_profile_setup',
         'current_session', 'current_question', 'responses',
@@ -253,10 +261,11 @@ def logout_user():
         'show_beta_reader', 'current_beta_feedback',
         'current_question_bank', 'current_bank_name', 'current_bank_type',
         'current_bank_id', 'show_bank_manager', 'show_bank_editor',
-        'editing_bank_id', 'editing_bank_name', 'qb_manager', 'qb_manager_initialized'
+        'editing_bank_id', 'editing_bank_name'
     ]
     for key in keys:
-        st.session_state.pop(key, None)
+        if key in st.session_state:
+            del st.session_state[key]
     st.query_params.clear()
     st.rerun()
 
@@ -325,10 +334,11 @@ def save_response(session_id, question, answer):
     
     if session_id not in st.session_state.responses:
         session_data = None
-        for s in st.session_state.current_question_bank:
-            if s["id"] == session_id:
-                session_data = s
-                break
+        if st.session_state.current_question_bank:
+            for s in st.session_state.current_question_bank:
+                if s["id"] == session_id:
+                    session_data = s
+                    break
         
         if not session_data:
             session_data = {
@@ -375,14 +385,35 @@ def delete_response(session_id, question):
 
 def calculate_author_word_count(session_id):
     total_words = 0
-    session_data = st.session_state.responses.get(session_id, {})
-    for question, answer_data in session_data.get("questions", {}).items():
-        if answer_data.get("answer"):
-            total_words += len(re.findall(r'\w+', answer_data["answer"]))
+    if session_id in st.session_state.responses:
+        session_data = st.session_state.responses.get(session_id, {})
+        for question, answer_data in session_data.get("questions", {}).items():
+            if answer_data.get("answer"):
+                total_words += len(re.findall(r'\w+', answer_data["answer"]))
     return total_words
 
 def get_progress_info(session_id):
     current_count = calculate_author_word_count(session_id)
+    
+    # Ensure session_id exists in responses
+    if session_id not in st.session_state.responses:
+        # Find session in current bank
+        session_data = None
+        if st.session_state.current_question_bank:
+            for s in st.session_state.current_question_bank:
+                if s["id"] == session_id:
+                    session_data = s
+                    break
+        
+        # Initialize it
+        st.session_state.responses[session_id] = {
+            "title": session_data.get("title", f"Session {session_id}") if session_data else f"Session {session_id}",
+            "questions": {},
+            "summary": "",
+            "completed": False,
+            "word_target": session_data.get("word_target", DEFAULT_WORD_TARGET) if session_data else DEFAULT_WORD_TARGET
+        }
+    
     target = st.session_state.responses[session_id].get("word_target", DEFAULT_WORD_TARGET)
     if target == 0:
         progress_percent = 100
@@ -432,24 +463,24 @@ def auto_correct_text(text):
 # QUESTION BANK LOADING - FIXED VERSION
 # ============================================================================
 
-# THIS REPLACES THE OLD SESSIONS LOADING SECTION
-if 'current_question_bank' not in st.session_state or st.session_state.current_question_bank is None:
+# Function to initialize question bank
+def initialize_question_bank():
+    """Initialize the question bank system"""
+    if 'current_question_bank' in st.session_state and st.session_state.current_question_bank is not None:
+        return True
     
-    # Try to use QuestionBankManager first
+    # Try to use QuestionBankManager
     if QuestionBankManager:
         try:
-            # Create directories explicitly
-            os.makedirs("question_banks/default", exist_ok=True)
-            os.makedirs("question_banks/users", exist_ok=True)
-            
-            # Initialize with user_id if logged in, otherwise None
+            # Get user_id if logged in
             user_id = st.session_state.get('user_id', None)
+            
+            # Create QB Manager
             qb_manager = QuestionBankManager(user_id)
             st.session_state.qb_manager = qb_manager
             
-            # Check if sessions.csv exists and copy it to the default banks
+            # Copy sessions.csv if it exists
             if os.path.exists("sessions/sessions.csv"):
-                import shutil
                 dest_path = "question_banks/default/life_story_comprehensive.csv"
                 if not os.path.exists(dest_path):
                     shutil.copy("sessions/sessions.csv", dest_path)
@@ -464,39 +495,49 @@ if 'current_question_bank' not in st.session_state or st.session_state.current_q
                 st.session_state.current_bank_type = "default"
                 st.session_state.current_bank_id = "life_story_comprehensive"
                 st.session_state.qb_manager_initialized = True
-            else:
-                # Fallback to SessionLoader
-                if SessionLoader:
-                    session_loader = SessionLoader()
-                    legacy_sessions = session_loader.load_sessions_from_csv()
-                    if legacy_sessions:
-                        st.session_state.current_question_bank = legacy_sessions
-                        st.session_state.current_bank_name = "Legacy Bank"
-                        st.session_state.current_bank_type = "legacy"
-                        st.session_state.qb_manager_initialized = True
+                
+                # Initialize responses for all sessions
+                for session in default_sessions:
+                    session_id = session["id"]
+                    if session_id not in st.session_state.responses:
+                        st.session_state.responses[session_id] = {
+                            "title": session["title"],
+                            "questions": {},
+                            "summary": "",
+                            "completed": False,
+                            "word_target": session.get("word_target", DEFAULT_WORD_TARGET)
+                        }
+                return True
                 
         except Exception as e:
-            # Fallback to original SessionLoader
-            if SessionLoader:
-                session_loader = SessionLoader()
-                legacy_sessions = session_loader.load_sessions_from_csv()
-                if legacy_sessions:
-                    st.session_state.current_question_bank = legacy_sessions
-                    st.session_state.current_bank_name = "Legacy Bank"
-                    st.session_state.current_bank_type = "legacy"
-                    st.session_state.qb_manager_initialized = True
-    else:
-        # Original fallback
-        if SessionLoader:
+            print(f"QuestionBankManager error: {e}")
+    
+    # Fallback to SessionLoader
+    if SessionLoader:
+        try:
             session_loader = SessionLoader()
             legacy_sessions = session_loader.load_sessions_from_csv()
             if legacy_sessions:
                 st.session_state.current_question_bank = legacy_sessions
                 st.session_state.current_bank_name = "Legacy Bank"
                 st.session_state.current_bank_type = "legacy"
-
-# Set SESSIONS from session state for compatibility
-SESSIONS = st.session_state.get('current_question_bank', [])
+                
+                # Initialize responses for all sessions
+                for session in legacy_sessions:
+                    session_id = session["id"]
+                    if session_id not in st.session_state.responses:
+                        st.session_state.responses[session_id] = {
+                            "title": session["title"],
+                            "questions": {},
+                            "summary": "",
+                            "completed": False,
+                            "word_target": session.get("word_target", DEFAULT_WORD_TARGET)
+                        }
+                return True
+        except Exception as e:
+            print(f"SessionLoader error: {e}")
+    
+    return False
 
 # ============================================================================
 # QUESTION BANK FUNCTIONS
@@ -514,7 +555,7 @@ def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
     st.session_state.current_question = 0
     st.session_state.current_question_override = None
     
-    # Initialize responses for new sessions
+    # Initialize responses for all sessions in the new bank
     for session in sessions:
         session_id = session["id"]
         if session_id not in st.session_state.responses:
@@ -809,7 +850,6 @@ def show_session_manager():
     session_manager = SessionManager(st.session_state.user_id, "sessions/sessions.csv")
     
     def on_session_select(session_id):
-        all_sessions = session_manager.get_all_sessions()
         for i, session in enumerate(st.session_state.current_question_bank):
             if session["id"] == session_id:
                 st.session_state.current_session = i
@@ -841,14 +881,12 @@ def show_bank_manager():
         st.session_state.show_bank_manager = False
         return
     
-    # Get or create QB Manager
-    if st.session_state.qb_manager is None and st.session_state.get('user_id'):
-        st.session_state.qb_manager = QuestionBankManager(st.session_state.user_id)
+    # Get user_id - this should now be set if logged in
+    user_id = st.session_state.get('user_id', None)
     
+    # Create QB Manager with user_id
     if st.session_state.qb_manager is None:
-        st.error("Please log in to manage question banks")
-        st.session_state.show_bank_manager = False
-        return
+        st.session_state.qb_manager = QuestionBankManager(user_id)
     
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
     
@@ -858,6 +896,7 @@ def show_bank_manager():
             st.session_state.show_bank_manager = False
             st.rerun()
     
+    # Display the bank selector - it will handle login status internally
     st.session_state.qb_manager.display_bank_selector()
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -869,14 +908,12 @@ def show_bank_editor():
         st.session_state.show_bank_editor = False
         return
     
-    # Get or create QB Manager
-    if st.session_state.qb_manager is None and st.session_state.get('user_id'):
-        st.session_state.qb_manager = QuestionBankManager(st.session_state.user_id)
+    # Get user_id
+    user_id = st.session_state.get('user_id', None)
     
+    # Create QB Manager with user_id
     if st.session_state.qb_manager is None:
-        st.error("Please log in to edit banks")
-        st.session_state.show_bank_editor = False
-        return
+        st.session_state.qb_manager = QuestionBankManager(user_id)
     
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
     
@@ -897,7 +934,7 @@ st.set_page_config(
 
 default_state = {
     "logged_in": False,
-    "user_id": "",
+    "user_id": None,
     "user_account": None,
     "show_profile_setup": False,
     "current_session": 0,
@@ -943,6 +980,16 @@ default_state = {
 for key, value in default_state.items():
     if key not in st.session_state:
         st.session_state[key] = value
+
+# ============================================================================
+# INITIALIZE QUESTION BANK (run this after state is set up)
+# ============================================================================
+
+if not st.session_state.qb_manager_initialized:
+    initialize_question_bank()
+
+# Set SESSIONS from session state for compatibility
+SESSIONS = st.session_state.get('current_question_bank', [])
 
 # ============================================================================
 # LOAD USER DATA
@@ -1101,6 +1148,9 @@ if not st.session_state.logged_in:
                             st.session_state.user_account = result["user_record"]
                             st.session_state.logged_in = True
                             st.session_state.data_loaded = False
+                            # Re-initialize QB Manager with user_id
+                            st.session_state.qb_manager = None
+                            st.session_state.qb_manager_initialized = False
                             if remember_me:
                                 st.query_params['user'] = result['user_id']
                             st.success("Login successful!")
@@ -1163,6 +1213,9 @@ if not st.session_state.logged_in:
                             st.session_state.logged_in = True
                             st.session_state.data_loaded = False
                             st.session_state.show_profile_setup = True
+                            # Re-initialize QB Manager with user_id
+                            st.session_state.qb_manager = None
+                            st.session_state.qb_manager_initialized = False
                             st.success("Account created!")
                             if email_sent:
                                 st.info(f"Welcome email sent to {email}")
@@ -1267,31 +1320,32 @@ with st.sidebar:
     st.divider()
     
     st.header("📖 Sessions")
-    for i, session in enumerate(SESSIONS):
-        session_id = session["id"]
-        session_data = st.session_state.responses.get(session_id, {})
-        
-        responses_count = len(session_data.get("questions", {}))
-        total_questions = len(session["questions"])
-        
-        if responses_count == total_questions:
-            status = "🟢"
-        elif responses_count > 0:
-            status = "🟡"
-        else:
-            status = "🔴"
-        
-        if i == st.session_state.current_session:
-            status = "▶️"
-        
-        button_text = f"{status} {session_id}: {session['title']}"
-        
-        if st.button(button_text, key=f"select_session_{i}", use_container_width=True):
-            st.session_state.current_session = i
-            st.session_state.current_question = 0
-            st.session_state.editing = False
-            st.session_state.current_question_override = None
-            st.rerun()
+    if st.session_state.current_question_bank:
+        for i, session in enumerate(st.session_state.current_question_bank):
+            session_id = session["id"]
+            session_data = st.session_state.responses.get(session_id, {})
+            
+            responses_count = len(session_data.get("questions", {}))
+            total_questions = len(session["questions"])
+            
+            if responses_count == total_questions and total_questions > 0:
+                status = "🟢"
+            elif responses_count > 0:
+                status = "🟡"
+            else:
+                status = "🔴"
+            
+            if i == st.session_state.current_session:
+                status = "▶️"
+            
+            button_text = f"{status} {session_id}: {session['title']}"
+            
+            if st.button(button_text, key=f"select_session_{i}", use_container_width=True):
+                st.session_state.current_session = i
+                st.session_state.current_question = 0
+                st.session_state.editing = False
+                st.session_state.current_question_override = None
+                st.rerun()
     
     st.divider()
     
@@ -1729,6 +1783,3 @@ Tell My Story Timeline • 👤 {profile['first_name']} {profile['last_name']} �
     st.caption(footer_info)
 else:
     st.caption(f"Tell My Story Timeline • User: {st.session_state.user_id}")
-
-
-
