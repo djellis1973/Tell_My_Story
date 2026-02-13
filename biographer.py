@@ -1357,30 +1357,56 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# IMAGE UPLOAD SECTION - Legacy uploader (still works with Quill)
+# IMAGE UPLOAD SECTION - WITH INSERT BUTTON
 # ============================================================================
 if st.session_state.logged_in and st.session_state.image_handler:
     
-    # Display existing images as thumbnails
+    # Display existing images with Insert button
     if existing_images:
         st.markdown("### 📸 Your Uploaded Photos")
-        st.markdown("*These photos are stored in your account. You can also drag them directly into the editor above.*")
+        st.markdown("*Click Insert to add the photo and caption to your story*")
         
-        cols = st.columns(min(len(existing_images), 4))
         for idx, img in enumerate(existing_images):
-            with cols[idx % 4]:
+            col1, col2, col3 = st.columns([2, 3, 1])
+            
+            with col1:
                 st.markdown(img.get("thumb_html", ""), unsafe_allow_html=True)
-                if img.get("caption"):
-                    st.caption(f"📝 {img['caption']}")
-                if st.button(f"🗑️ Delete", key=f"del_img_{img['id']}_{idx}"):
-                    st.session_state.image_handler.delete_image(img['id'])
+            
+            with col2:
+                caption_text = img.get("caption", "")
+                if caption_text:
+                    st.markdown(f"**📝 Caption:** {caption_text}")
+                else:
+                    st.markdown("*No caption*")
+                st.caption(f"Uploaded: {img.get('timestamp', '')[:10]}")
+            
+            with col3:
+                if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
+                    # Create HTML with image and caption below
+                    img_html = img.get("full_html", "")
+                    caption_html = f"<p style='font-style: italic; color: #555; margin-top: 5px; margin-bottom: 15px;'>📝 {caption_text}</p>" if caption_text else ""
+                    
+                    # Get current editor content from session state
+                    editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
+                    current_content = st.session_state.get(editor_key, "")
+                    
+                    # Append image + caption to editor
+                    if current_content:
+                        new_content = current_content + "<br><br>" + img_html + caption_html
+                    else:
+                        new_content = img_html + caption_html
+                    
+                    # Update the editor
+                    st.session_state[editor_key] = new_content
+                    st.success(f"✅ Image inserted! Scroll up to see it in the editor.")
+                    time.sleep(1)
                     st.rerun()
         
         st.markdown("---")
     
     # Upload new images
     with st.expander("📤 Upload New Photos", expanded=len(existing_images) == 0):
-        st.markdown("**Upload photos to use in your story (or just drag them into the editor):**")
+        st.markdown("**Add new photos to your story:**")
         
         uploaded_file = st.file_uploader(
             "Choose an image...", 
@@ -1394,7 +1420,7 @@ if st.session_state.logged_in and st.session_state.image_handler:
             with col1:
                 caption = st.text_input(
                     "Caption / Description:",
-                    placeholder="What does this photo show?",
+                    placeholder="What does this photo show? When was it taken?",
                     key=f"cap_{current_session_id}_{hash(current_question_text)}"
                 )
             with col2:
@@ -1407,7 +1433,7 @@ if st.session_state.logged_in and st.session_state.image_handler:
                             caption
                         )
                         if result:
-                            st.success("✅ Photo uploaded! You can now drag it into the editor above.")
+                            st.success("✅ Photo uploaded! It now appears above - click Insert to add it to your story.")
                             time.sleep(1.5)
                             st.rerun()
                         else:
