@@ -1,4 +1,4 @@
-# biographer.py – Tell My Story App (COMPLETE WITH IMAGE UPLOAD)
+# biographer.py – Tell My Story App (COMPLETE WITH IMAGE UPLOAD - CAPTIONS BELOW IMAGES)
 import streamlit as st
 import json
 from datetime import datetime, date
@@ -22,7 +22,7 @@ import io
 # ============================================================================
 
 for dir_path in ["question_banks/default", "question_banks/users", "question_banks", 
-                 "uploads", "uploads/thumbnails", "uploads/metadata"]:
+                 "uploads", "uploads/thumbnails", "uploads/metadata", "accounts", "sessions"]:
     os.makedirs(dir_path, exist_ok=True)
 
 # ============================================================================
@@ -77,7 +77,7 @@ try:
     with open("styles.css", encoding="utf-8") as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 except FileNotFoundError:
-    st.warning("styles.css not found – layout may look broken")
+    pass
 
 LOGO_URL = "https://menuhunterai.com/wp-content/uploads/2026/02/tms_logo.png"
 
@@ -94,7 +94,7 @@ EMAIL_CONFIG = {
 }
 
 # ============================================================================
-# IMAGE HANDLER (BUILT-IN - NO EXTERNAL MODULE NEEDED)
+# IMAGE HANDLER (BUILT-IN - USER-SPECIFIC STORAGE)
 # ============================================================================
 
 class ImageHandler:
@@ -116,25 +116,37 @@ class ImageHandler:
             image_id = hashlib.md5(f"{self.user_id}{session_id}{question_text}{datetime.now()}".encode()).hexdigest()[:16]
             
             img = Image.open(io.BytesIO(image_data))
-            if img.mode == 'RGBA': img = img.convert('RGB')
+            if img.mode == 'RGBA': 
+                img = img.convert('RGB')
             
+            # Save full-size image
             main_buffer = io.BytesIO()
             img.save(main_buffer, format="JPEG", quality=85, optimize=True)
             
+            # Create thumbnail
             img.thumbnail((200, 200))
             thumb_buffer = io.BytesIO()
             img.save(thumb_buffer, format="JPEG", quality=70, optimize=True)
             
+            # Save files
             user_path = self.get_user_path()
-            with open(f"{user_path}/{image_id}.jpg", 'wb') as f: f.write(main_buffer.getvalue())
-            with open(f"{user_path}/thumbnails/{image_id}.jpg", 'wb') as f: f.write(thumb_buffer.getvalue())
+            with open(f"{user_path}/{image_id}.jpg", 'wb') as f: 
+                f.write(main_buffer.getvalue())
+            with open(f"{user_path}/thumbnails/{image_id}.jpg", 'wb') as f: 
+                f.write(thumb_buffer.getvalue())
             
+            # Save metadata with user_id
             metadata = {
-                "id": image_id, "session_id": session_id, "question": question_text,
-                "caption": caption, "alt_text": caption[:100], "timestamp": datetime.now().isoformat(),
+                "id": image_id, 
+                "session_id": session_id, 
+                "question": question_text,
+                "caption": caption, 
+                "alt_text": caption[:100] if caption else "",
+                "timestamp": datetime.now().isoformat(),
                 "user_id": self.user_id
             }
-            with open(f"{self.base_path}/metadata/{image_id}.json", 'w') as f: json.dump(metadata, f)
+            with open(f"{self.base_path}/metadata/{image_id}.json", 'w') as f: 
+                json.dump(metadata, f)
             
             return {"has_images": True, "images": [{"id": image_id, "caption": caption}]}
         except Exception as e:
@@ -145,68 +157,65 @@ class ImageHandler:
         try:
             user_path = self.get_user_path()
             path = f"{user_path}/thumbnails/{image_id}.jpg" if thumbnail else f"{user_path}/{image_id}.jpg"
-            if not os.path.exists(path): return None
+            if not os.path.exists(path): 
+                return None
             
-            with open(path, 'rb') as f: image_data = f.read()
+            with open(path, 'rb') as f: 
+                image_data = f.read()
             b64 = base64.b64encode(image_data).decode()
             
             meta_path = f"{self.base_path}/metadata/{image_id}.json"
-            caption = json.load(open(meta_path)).get("caption", "") if os.path.exists(meta_path) else ""
+            caption = ""
+            if os.path.exists(meta_path):
+                with open(meta_path, 'r') as f:
+                    metadata = json.load(f)
+                    caption = metadata.get("caption", "")
             
             return {
-                "html": f'<img src="data:image/jpeg;base64,{b64}" style="max-width:100%; border-radius:8px; margin:10px 0;" alt="{caption}">',
-                "caption": caption, "base64": b64
+                "html": f'<img src="data:image/jpeg;base64,{b64}" style="max-width:100%; border-radius:8px; margin:5px 0;" alt="{caption}">',
+                "caption": caption, 
+                "base64": b64
             }
-        except: return None
+        except:
+            return None
     
     def get_images_for_answer(self, session_id, question_text):
         images = []
-        if not os.path.exists(f"{self.base_path}/metadata"): return images
+        metadata_dir = f"{self.base_path}/metadata"
+        if not os.path.exists(metadata_dir): 
+            return images
         
-        for fname in os.listdir(f"{self.base_path}/metadata"):
+        for fname in os.listdir(metadata_dir):
             if fname.endswith('.json'):
                 try:
-                    with open(f"{self.base_path}/metadata/{fname}") as f: meta = json.load(f)
-                    if meta.get("session_id") == session_id and meta.get("question") == question_text and meta.get("user_id") == self.user_id:
+                    with open(f"{metadata_dir}/{fname}") as f: 
+                        meta = json.load(f)
+                    if (meta.get("session_id") == session_id and 
+                        meta.get("question") == question_text and 
+                        meta.get("user_id") == self.user_id):
                         thumb = self.get_image_html(meta["id"], thumbnail=True)
                         full = self.get_image_html(meta["id"])
                         if thumb and full:
-                            images.append({**meta, "thumb_html": thumb["html"], "full_html": full["html"]})
-                except: continue
+                            images.append({
+                                **meta, 
+                                "thumb_html": thumb["html"], 
+                                "full_html": full["html"]
+                            })
+                except:
+                    continue
         return sorted(images, key=lambda x: x.get("timestamp", ""), reverse=True)
     
     def delete_image(self, image_id):
         try:
             user_path = self.get_user_path()
-            for p in [f"{user_path}/{image_id}.jpg", f"{user_path}/thumbnails/{image_id}.jpg", 
+            for p in [f"{user_path}/{image_id}.jpg", 
+                     f"{user_path}/thumbnails/{image_id}.jpg", 
                      f"{self.base_path}/metadata/{image_id}.json"]:
-                if os.path.exists(p): os.remove(p)
+                if os.path.exists(p): 
+                    os.remove(p)
             return True
-        except: return False
-    
-    def render_image_uploader(self, session_id, question_text, existing_images=None):
-        st.markdown("### 📸 Add Photos")
-        st.caption("Upload photos that illustrate this memory (JPG, PNG)")
-        
-        if existing_images:
-            st.markdown("**Your Photos:**")
-            cols = st.columns(min(len(existing_images), 3))
-            for idx, img in enumerate(existing_images):
-                with cols[idx % 3]:
-                    st.markdown(img.get("thumb_html", ""), unsafe_allow_html=True)
-                    if img.get("caption"): st.caption(f"📝 {img['caption']}")
-                    if st.button(f"🗑️", key=f"del_{img['id']}"):
-                        self.delete_image(img['id']); st.rerun()
-        
-        uploaded = st.file_uploader("Choose image...", type=['jpg','jpeg','png'], 
-                                   key=f"up_{session_id}_{hash(question_text)}", label_visibility="collapsed")
-        if uploaded:
-            cap = st.text_input("Caption:", key=f"cap_{session_id}_{hash(question_text)}")
-            if st.button("📤 Upload", key=f"btn_{session_id}_{hash(question_text)}"):
-                with st.spinner("Uploading..."):
-                    if self.save_image(uploaded, session_id, question_text, cap):
-                        st.success("Uploaded!"); st.rerun()
-        return existing_images or []
+        except:
+            return False
 
 def init_image_handler():
     if not st.session_state.image_handler or st.session_state.image_handler.user_id != st.session_state.get('user_id'):
@@ -230,18 +239,38 @@ def verify_password(stored_hash, password):
 def create_user_account(user_data, password=None):
     try:
         user_id = hashlib.sha256(f"{user_data['email']}{datetime.now().isoformat()}".encode()).hexdigest()[:12]
-        if not password: password = generate_password()
+        if not password: 
+            password = generate_password()
         user_record = {
-            "user_id": user_id, "email": user_data["email"].lower().strip(),
-            "password_hash": hash_password(password), "account_type": user_data.get("account_for", "self"),
-            "created_at": datetime.now().isoformat(), "last_login": datetime.now().isoformat(),
-            "profile": {"first_name": user_data["first_name"], "last_name": user_data["last_name"],
-                       "email": user_data["email"], "gender": user_data.get("gender", ""),
-                       "birthdate": user_data.get("birthdate", ""), "timeline_start": user_data.get("birthdate", "")},
-            "settings": {"email_notifications": True, "auto_save": True, "privacy_level": "private",
-                        "theme": "light", "email_verified": False},
-            "stats": {"total_sessions": 0, "total_words": 0, "current_streak": 0, "longest_streak": 0,
-                     "account_age_days": 0, "last_active": datetime.now().isoformat()}
+            "user_id": user_id, 
+            "email": user_data["email"].lower().strip(),
+            "password_hash": hash_password(password), 
+            "account_type": user_data.get("account_for", "self"),
+            "created_at": datetime.now().isoformat(), 
+            "last_login": datetime.now().isoformat(),
+            "profile": {
+                "first_name": user_data["first_name"], 
+                "last_name": user_data["last_name"],
+                "email": user_data["email"], 
+                "gender": user_data.get("gender", ""),
+                "birthdate": user_data.get("birthdate", ""), 
+                "timeline_start": user_data.get("birthdate", "")
+            },
+            "settings": {
+                "email_notifications": True, 
+                "auto_save": True, 
+                "privacy_level": "private",
+                "theme": "light", 
+                "email_verified": False
+            },
+            "stats": {
+                "total_sessions": 0, 
+                "total_words": 0, 
+                "current_streak": 0, 
+                "longest_streak": 0,
+                "account_age_days": 0, 
+                "last_active": datetime.now().isoformat()
+            }
         }
         save_account_data(user_record)
         return {"success": True, "user_id": user_id, "password": password, "user_record": user_record}
@@ -250,40 +279,44 @@ def create_user_account(user_data, password=None):
 
 def save_account_data(user_record):
     try:
-        os.makedirs("accounts", exist_ok=True)
         with open(f"accounts/{user_record['user_id']}_account.json", 'w') as f:
             json.dump(user_record, f, indent=2)
         update_accounts_index(user_record)
         return True
-    except: return False
+    except: 
+        return False
 
 def update_accounts_index(user_record):
     try:
         index_file = "accounts/accounts_index.json"
-        os.makedirs("accounts", exist_ok=True)
         index = json.load(open(index_file, 'r')) if os.path.exists(index_file) else {}
         index[user_record['user_id']] = {
-            "email": user_record['email'], "first_name": user_record['profile']['first_name'],
-            "last_name": user_record['profile']['last_name'], "created_at": user_record['created_at'],
+            "email": user_record['email'], 
+            "first_name": user_record['profile']['first_name'],
+            "last_name": user_record['profile']['last_name'], 
+            "created_at": user_record['created_at'],
             "account_type": user_record['account_type']
         }
-        with open(index_file, 'w') as f: json.dump(index, f, indent=2)
+        with open(index_file, 'w') as f: 
+            json.dump(index, f, indent=2)
         return True
-    except: return False
+    except: 
+        return False
 
 def get_account_data(user_id=None, email=None):
     try:
-        os.makedirs("accounts", exist_ok=True)
         if user_id:
             fname = f"accounts/{user_id}_account.json"
-            if os.path.exists(fname): return json.load(open(fname, 'r'))
+            if os.path.exists(fname): 
+                return json.load(open(fname, 'r'))
         if email:
             email = email.lower().strip()
             index = json.load(open("accounts/accounts_index.json", 'r')) if os.path.exists("accounts/accounts_index.json") else {}
             for uid, data in index.items():
                 if data.get("email", "").lower() == email:
                     return json.load(open(f"accounts/{uid}_account.json", 'r'))
-    except: pass
+    except: 
+        pass
     return None
 
 def authenticate_user(email, password):
@@ -299,7 +332,8 @@ def authenticate_user(email, password):
 
 def send_welcome_email(user_data, credentials):
     try:
-        if not EMAIL_CONFIG['sender_email'] or not EMAIL_CONFIG['sender_password']: return False
+        if not EMAIL_CONFIG['sender_email'] or not EMAIL_CONFIG['sender_password']: 
+            return False
         msg = MIMEMultipart()
         msg['From'] = EMAIL_CONFIG['sender_email']
         msg['To'] = user_data['email']
@@ -318,11 +352,13 @@ def send_welcome_email(user_data, credentials):
         """
         msg.attach(MIMEText(body, 'html'))
         with smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port']) as server:
-            if EMAIL_CONFIG['use_tls']: server.starttls()
+            if EMAIL_CONFIG['use_tls']: 
+                server.starttls()
             server.login(EMAIL_CONFIG['sender_email'], EMAIL_CONFIG['sender_password'])
             server.send_message(msg)
         return True
-    except: return False
+    except: 
+        return False
 
 def logout_user():
     st.session_state.qb_manager = None
@@ -340,7 +376,8 @@ def logout_user():
             'current_bank_type', 'current_bank_id', 'show_bank_manager', 'show_bank_editor',
             'editing_bank_id', 'editing_bank_name', 'show_image_manager']
     for key in keys:
-        if key in st.session_state: del st.session_state[key]
+        if key in st.session_state: 
+            del st.session_state[key]
     st.query_params.clear()
     st.rerun()
 
@@ -357,29 +394,34 @@ def load_user_data(user_id):
         if os.path.exists(fname):
             return json.load(open(fname, 'r'))
         return {"responses": {}, "vignettes": [], "last_loaded": datetime.now().isoformat()}
-    except: return {"responses": {}, "vignettes": [], "last_loaded": datetime.now().isoformat()}
+    except: 
+        return {"responses": {}, "vignettes": [], "last_loaded": datetime.now().isoformat()}
 
 def save_user_data(user_id, responses_data):
     fname = get_user_filename(user_id)
     try:
         existing = load_user_data(user_id)
         data = {
-            "user_id": user_id, "responses": responses_data,
+            "user_id": user_id, 
+            "responses": responses_data,
             "vignettes": existing.get("vignettes", []),
             "beta_feedback": existing.get("beta_feedback", {}),
             "last_saved": datetime.now().isoformat()
         }
-        with open(fname, 'w') as f: json.dump(data, f, indent=2)
+        with open(fname, 'w') as f: 
+            json.dump(data, f, indent=2)
         return True
-    except: return False
+    except: 
+        return False
 
 # ============================================================================
-# CORE RESPONSE FUNCTIONS - MODIFIED WITH IMAGE SUPPORT
+# CORE RESPONSE FUNCTIONS - WITH IMAGE SUPPORT
 # ============================================================================
 
 def save_response(session_id, question, answer):
     user_id = st.session_state.user_id
-    if not user_id: return False
+    if not user_id: 
+        return False
     
     if st.session_state.user_account:
         word_count = len(re.findall(r'\w+', answer))
@@ -392,7 +434,9 @@ def save_response(session_id, question, answer):
                           {"title": f"Session {session_id}", "word_target": DEFAULT_WORD_TARGET})
         st.session_state.responses[session_id] = {
             "title": session_data.get("title", f"Session {session_id}"),
-            "questions": {}, "summary": "", "completed": False,
+            "questions": {}, 
+            "summary": "", 
+            "completed": False,
             "word_target": session_data.get("word_target", DEFAULT_WORD_TARGET)
         }
     
@@ -402,23 +446,30 @@ def save_response(session_id, question, answer):
         images = st.session_state.image_handler.get_images_for_answer(session_id, question)
     
     st.session_state.responses[session_id]["questions"][question] = {
-        "answer": answer, "question": question, "timestamp": datetime.now().isoformat(),
-        "answer_index": 1, "has_images": len(images) > 0,
-        "image_count": len(images), "images": [{"id": img["id"], "caption": img.get("caption", "")} for img in images]
+        "answer": answer, 
+        "question": question, 
+        "timestamp": datetime.now().isoformat(),
+        "answer_index": 1, 
+        "has_images": len(images) > 0,
+        "image_count": len(images), 
+        "images": [{"id": img["id"], "caption": img.get("caption", "")} for img in images]
     }
     
     success = save_user_data(user_id, st.session_state.responses)
-    if success: st.session_state.data_loaded = False
+    if success: 
+        st.session_state.data_loaded = False
     return success
 
 def delete_response(session_id, question):
     user_id = st.session_state.user_id
-    if not user_id: return False
+    if not user_id: 
+        return False
     
     if session_id in st.session_state.responses and question in st.session_state.responses[session_id]["questions"]:
         del st.session_state.responses[session_id]["questions"][question]
         success = save_user_data(user_id, st.session_state.responses)
-        if success: st.session_state.data_loaded = False
+        if success: 
+            st.session_state.data_loaded = False
         return success
     return False
 
@@ -426,7 +477,8 @@ def calculate_author_word_count(session_id):
     total = 0
     if session_id in st.session_state.responses:
         for q, d in st.session_state.responses[session_id].get("questions", {}).items():
-            if d.get("answer"): total += len(re.findall(r'\w+', d["answer"]))
+            if d.get("answer"): 
+                total += len(re.findall(r'\w+', d["answer"]))
     return total
 
 def get_progress_info(session_id):
@@ -435,16 +487,22 @@ def get_progress_info(session_id):
         session_data = next((s for s in (st.session_state.current_question_bank or []) if s["id"] == session_id), {})
         st.session_state.responses[session_id] = {
             "title": session_data.get("title", f"Session {session_id}"),
-            "questions": {}, "summary": "", "completed": False,
+            "questions": {}, 
+            "summary": "", 
+            "completed": False,
             "word_target": session_data.get("word_target", DEFAULT_WORD_TARGET)
         }
     
     target = st.session_state.responses[session_id].get("word_target", DEFAULT_WORD_TARGET)
-    if target == 0: percent = 100
-    else: percent = (current / target) * 100
+    if target == 0: 
+        percent = 100
+    else: 
+        percent = (current / target) * 100
     
     return {
-        "current_count": current, "target": target, "progress_percent": percent,
+        "current_count": current, 
+        "target": target, 
+        "progress_percent": percent,
         "emoji": "🟢" if percent >= 100 else "🟡" if percent >= 70 else "🔴",
         "color": "#27ae60" if percent >= 100 else "#f39c12" if percent >= 70 else "#e74c3c",
         "remaining_words": max(0, target - current),
@@ -452,23 +510,29 @@ def get_progress_info(session_id):
     }
 
 def auto_correct_text(text):
-    if not text: return text
+    if not text: 
+        return text
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": "Fix spelling and grammar. Return only corrected text."},
-                     {"role": "user", "content": text}],
-            max_tokens=len(text) + 100, temperature=0.1
+            messages=[
+                {"role": "system", "content": "Fix spelling and grammar. Return only corrected text."},
+                {"role": "user", "content": text}
+            ],
+            max_tokens=len(text) + 100, 
+            temperature=0.1
         )
         return resp.choices[0].message.content
-    except: return text
+    except: 
+        return text
 
 # ============================================================================
-# SEARCH FUNCTIONALITY (UPDATED FOR IMAGES)
+# SEARCH FUNCTIONALITY
 # ============================================================================
 
 def search_all_answers(search_query):
-    if not search_query or len(search_query) < 2: return []
+    if not search_query or len(search_query) < 2: 
+        return []
     
     results = []
     search_query = search_query.lower()
@@ -485,17 +549,20 @@ def search_all_answers(search_query):
                 (has_images and any(search_query in img.get("caption", "").lower() 
                                   for img in answer_data.get("images", [])))):
                 
-                # Get image captions for display
                 image_captions = []
                 if has_images and st.session_state.image_handler:
                     images = st.session_state.image_handler.get_images_for_answer(session_id, question_text)
                     image_captions = [img.get("caption", "") for img in images if img.get("caption")]
                 
                 results.append({
-                    "session_id": session_id, "session_title": session["title"],
-                    "question": question_text, "answer": answer[:300] + "..." if len(answer) > 300 else answer,
-                    "timestamp": answer_data.get("timestamp", ""), "word_count": len(answer.split()),
-                    "has_images": has_images, "image_count": answer_data.get("image_count", 0),
+                    "session_id": session_id, 
+                    "session_title": session["title"],
+                    "question": question_text, 
+                    "answer": answer[:300] + "..." if len(answer) > 300 else answer,
+                    "timestamp": answer_data.get("timestamp", ""), 
+                    "word_count": len(answer.split()),
+                    "has_images": has_images, 
+                    "image_count": answer_data.get("image_count", 0),
                     "image_captions": image_captions
                 })
     
@@ -530,11 +597,15 @@ def initialize_question_bank():
                     sid = s["id"]
                     if sid not in st.session_state.responses:
                         st.session_state.responses[sid] = {
-                            "title": s["title"], "questions": {}, "summary": "",
-                            "completed": False, "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
+                            "title": s["title"], 
+                            "questions": {}, 
+                            "summary": "",
+                            "completed": False, 
+                            "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
                         }
                 return True
-        except: pass
+        except: 
+            pass
     
     if SessionLoader:
         try:
@@ -547,11 +618,15 @@ def initialize_question_bank():
                     sid = s["id"]
                     if sid not in st.session_state.responses:
                         st.session_state.responses[sid] = {
-                            "title": s["title"], "questions": {}, "summary": "",
-                            "completed": False, "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
+                            "title": s["title"], 
+                            "questions": {}, 
+                            "summary": "",
+                            "completed": False, 
+                            "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
                         }
                 return True
-        except: pass
+        except: 
+            pass
     return False
 
 def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
@@ -567,8 +642,11 @@ def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
         sid = s["id"]
         if sid not in st.session_state.responses:
             st.session_state.responses[sid] = {
-                "title": s["title"], "questions": {}, "summary": "",
-                "completed": False, "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
+                "title": s["title"], 
+                "questions": {}, 
+                "summary": "",
+                "completed": False, 
+                "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
             }
 
 # ============================================================================
@@ -576,19 +654,22 @@ def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
 # ============================================================================
 
 def generate_beta_reader_feedback(session_title, session_text, feedback_type="comprehensive"):
-    if not beta_reader: return {"error": "BetaReader not available"}
+    if not beta_reader: 
+        return {"error": "BetaReader not available"}
     return beta_reader.generate_feedback(session_title, session_text, feedback_type)
 
 def save_beta_feedback(user_id, session_id, feedback_data):
-    if not beta_reader: return False
+    if not beta_reader: 
+        return False
     return beta_reader.save_feedback(user_id, session_id, feedback_data, get_user_filename, load_user_data)
 
 def get_previous_beta_feedback(user_id, session_id):
-    if not beta_reader: return None
+    if not beta_reader: 
+        return None
     return beta_reader.get_previous_feedback(user_id, session_id, get_user_filename, load_user_data)
 
 # ============================================================================
-# VIGNETTE FUNCTIONS (COMPACT)
+# VIGNETTE FUNCTIONS
 # ============================================================================
 
 def on_vignette_select(vignette_id):
@@ -606,48 +687,78 @@ def on_vignette_edit(vignette_id):
 
 def on_vignette_delete(vignette_id):
     if VignetteManager and st.session_state.get('vignette_manager', VignetteManager(st.session_state.user_id)).delete_vignette(vignette_id):
-        st.success("Deleted!"); st.rerun()
-    else: st.error("Failed to delete")
+        st.success("Deleted!"); 
+        st.rerun()
+    else: 
+        st.error("Failed to delete")
 
 def on_vignette_publish(vignette):
     st.session_state.published_vignette = vignette
-    st.success(f"Published '{vignette['title']}'!"); st.rerun()
+    st.success(f"Published '{vignette['title']}'!"); 
+    st.rerun()
 
 def show_vignette_modal():
-    if not VignetteManager: st.error("Vignette module not available"); st.session_state.show_vignette_modal = False; return
+    if not VignetteManager: 
+        st.error("Vignette module not available"); 
+        st.session_state.show_vignette_modal = False; 
+        return
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("←", key="vign_modal_back"): st.session_state.show_vignette_modal = False; st.session_state.editing_vignette_id = None; st.rerun()
+    if st.button("←", key="vign_modal_back"): 
+        st.session_state.show_vignette_modal = False; 
+        st.session_state.editing_vignette_id = None; 
+        st.rerun()
     st.title("✏️ Edit Vignette" if st.session_state.get('editing_vignette_id') else "✍️ Create Vignette")
-    if 'vignette_manager' not in st.session_state: st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+    if 'vignette_manager' not in st.session_state: 
+        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
     edit = st.session_state.vignette_manager.get_vignette_by_id(st.session_state.editing_vignette_id) if st.session_state.get('editing_vignette_id') else None
     st.session_state.vignette_manager.display_vignette_creator(on_publish=on_vignette_publish, edit_vignette=edit)
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_vignette_manager():
-    if not VignetteManager: st.error("Vignette module not available"); st.session_state.show_vignette_manager = False; return
+    if not VignetteManager: 
+        st.error("Vignette module not available"); 
+        st.session_state.show_vignette_manager = False; 
+        return
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("←", key="vign_mgr_back"): st.session_state.show_vignette_manager = False; st.rerun()
+    if st.button("←", key="vign_mgr_back"): 
+        st.session_state.show_vignette_manager = False; 
+        st.rerun()
     st.title("📚 Your Vignettes")
-    if 'vignette_manager' not in st.session_state: st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+    if 'vignette_manager' not in st.session_state: 
+        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
     filter_map = {"All Stories": "all", "Published": "published", "Drafts": "drafts"}
     filter_option = st.radio("Show:", ["All Stories", "Published", "Drafts"], horizontal=True, key="vign_filter")
     st.session_state.vignette_manager.display_vignette_gallery(
         filter_by=filter_map.get(filter_option, "all"),
-        on_select=on_vignette_select, on_edit=on_vignette_edit, on_delete=on_vignette_delete
+        on_select=on_vignette_select, 
+        on_edit=on_vignette_edit, 
+        on_delete=on_vignette_delete
     )
     st.divider()
     if st.button("➕ Create New Vignette", type="primary", use_container_width=True):
-        st.session_state.show_vignette_manager = False; st.session_state.show_vignette_modal = True; st.session_state.editing_vignette_id = None; st.rerun()
+        st.session_state.show_vignette_manager = False; 
+        st.session_state.show_vignette_modal = True; 
+        st.session_state.editing_vignette_id = None; 
+        st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_vignette_detail():
-    if not VignetteManager or not st.session_state.get('selected_vignette_id'): st.session_state.show_vignette_detail = False; return
+    if not VignetteManager or not st.session_state.get('selected_vignette_id'): 
+        st.session_state.show_vignette_detail = False; 
+        return
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("←", key="vign_detail_back"): st.session_state.show_vignette_detail = False; st.session_state.selected_vignette_id = None; st.rerun()
+    if st.button("←", key="vign_detail_back"): 
+        st.session_state.show_vignette_detail = False; 
+        st.session_state.selected_vignette_id = None; 
+        st.rerun()
     st.title("📖 Read Vignette")
-    if 'vignette_manager' not in st.session_state: st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+    if 'vignette_manager' not in st.session_state: 
+        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
     vignette = st.session_state.vignette_manager.get_vignette_by_id(st.session_state.selected_vignette_id)
-    if not vignette: st.error("Not found"); st.session_state.show_vignette_detail = False; return
+    if not vignette: 
+        st.error("Not found"); 
+        st.session_state.show_vignette_detail = False; 
+        return
     st.session_state.vignette_manager.display_full_vignette(
         st.session_state.selected_vignette_id,
         on_back=lambda: st.session_state.update(show_vignette_detail=False, selected_vignette_id=None),
@@ -667,13 +778,18 @@ def switch_to_custom_topic(topic_text):
     st.rerun()
 
 # ============================================================================
-# TOPIC BROWSER & SESSION MANAGER (COMPACT)
+# TOPIC BROWSER & SESSION MANAGER
 # ============================================================================
 
 def show_topic_browser():
-    if not TopicBank: st.error("Topic module not available"); st.session_state.show_topic_browser = False; return
+    if not TopicBank: 
+        st.error("Topic module not available"); 
+        st.session_state.show_topic_browser = False; 
+        return
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("← Back", key="topic_back"): st.session_state.show_topic_browser = False; st.rerun()
+    if st.button("← Back", key="topic_back"): 
+        st.session_state.show_topic_browser = False; 
+        st.rerun()
     st.title("📚 Topic Browser")
     TopicBank(st.session_state.user_id).display_topic_browser(
         on_topic_select=lambda t: (switch_to_custom_topic(t), st.session_state.update(show_topic_browser=False)),
@@ -682,21 +798,33 @@ def show_topic_browser():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_session_creator():
-    if not SessionManager: st.error("Session module not available"); st.session_state.show_session_creator = False; return
+    if not SessionManager: 
+        st.error("Session module not available"); 
+        st.session_state.show_session_creator = False; 
+        return
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("← Back", key="session_creator_back"): st.session_state.show_session_creator = False; st.rerun()
+    if st.button("← Back", key="session_creator_back"): 
+        st.session_state.show_session_creator = False; 
+        st.rerun()
     st.title("📋 Create Custom Session")
     SessionManager(st.session_state.user_id, "sessions/sessions.csv").display_session_creator()
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_session_manager():
-    if not SessionManager: st.error("Session module not available"); st.session_state.show_session_manager = False; return
+    if not SessionManager: 
+        st.error("Session module not available"); 
+        st.session_state.show_session_manager = False; 
+        return
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("← Back", key="session_manager_back"): st.session_state.show_session_manager = False; st.rerun()
+    if st.button("← Back", key="session_manager_back"): 
+        st.session_state.show_session_manager = False; 
+        st.rerun()
     st.title("📖 Session Manager")
     mgr = SessionManager(st.session_state.user_id, "sessions/sessions.csv")
     if st.button("➕ Create New Session", type="primary", use_container_width=True):
-        st.session_state.show_session_manager = False; st.session_state.show_session_creator = True; st.rerun()
+        st.session_state.show_session_manager = False; 
+        st.session_state.show_session_creator = True; 
+        st.rerun()
     st.divider()
     mgr.display_session_grid(cols=2, on_session_select=lambda sid: [st.session_state.update(
         current_session=i, current_question=0, current_question_override=None) for i, s in enumerate(st.session_state.current_question_bank) if s["id"] == sid][0])
@@ -707,20 +835,31 @@ def show_session_manager():
 # ============================================================================
 
 def show_bank_manager():
-    if not QuestionBankManager: st.error("Question Bank Manager not available"); st.session_state.show_bank_manager = False; return
+    if not QuestionBankManager: 
+        st.error("Question Bank Manager not available"); 
+        st.session_state.show_bank_manager = False; 
+        return
     user_id = st.session_state.get('user_id')
-    if st.session_state.qb_manager is None: st.session_state.qb_manager = QuestionBankManager(user_id)
-    else: st.session_state.qb_manager.user_id = user_id
+    if st.session_state.qb_manager is None: 
+        st.session_state.qb_manager = QuestionBankManager(user_id)
+    else: 
+        st.session_state.qb_manager.user_id = user_id
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("←", key="bank_manager_back"): st.session_state.show_bank_manager = False; st.rerun()
+    if st.button("←", key="bank_manager_back"): 
+        st.session_state.show_bank_manager = False; 
+        st.rerun()
     st.session_state.qb_manager.display_bank_selector()
     st.markdown('</div>', unsafe_allow_html=True)
 
 def show_bank_editor():
-    if not QuestionBankManager or not st.session_state.get('editing_bank_id'): st.session_state.show_bank_editor = False; return
+    if not QuestionBankManager or not st.session_state.get('editing_bank_id'): 
+        st.session_state.show_bank_editor = False; 
+        return
     user_id = st.session_state.get('user_id')
-    if st.session_state.qb_manager is None: st.session_state.qb_manager = QuestionBankManager(user_id)
-    else: st.session_state.qb_manager.user_id = user_id
+    if st.session_state.qb_manager is None: 
+        st.session_state.qb_manager = QuestionBankManager(user_id)
+    else: 
+        st.session_state.qb_manager.user_id = user_id
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
     st.session_state.qb_manager.display_bank_editor(st.session_state.editing_bank_id)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -732,7 +871,8 @@ def show_bank_editor():
 st.set_page_config(page_title="Tell My Story - Your Life Timeline", page_icon="📖", layout="wide", initial_sidebar_state="expanded")
 
 # Initialize question bank
-if not st.session_state.qb_manager_initialized: initialize_question_bank()
+if not st.session_state.qb_manager_initialized: 
+    initialize_question_bank()
 SESSIONS = st.session_state.get('current_question_bank', [])
 
 # Load user data
@@ -740,8 +880,10 @@ if st.session_state.logged_in and st.session_state.user_id and not st.session_st
     user_data = load_user_data(st.session_state.user_id)
     if "responses" in user_data:
         for sid_str, sdata in user_data["responses"].items():
-            try: sid = int(sid_str)
-            except: continue
+            try: 
+                sid = int(sid_str)
+            except: 
+                continue
             if sid in st.session_state.responses and "questions" in sdata and sdata["questions"]:
                 st.session_state.responses[sid]["questions"] = sdata["questions"]
     st.session_state.data_loaded = True
@@ -749,7 +891,9 @@ if st.session_state.logged_in and st.session_state.user_id and not st.session_st
 
 if not SESSIONS:
     st.error("❌ No question bank loaded. Use Bank Manager.")
-    if st.button("📋 Open Bank Manager", type="primary"): st.session_state.show_bank_manager = True; st.rerun()
+    if st.button("📋 Open Bank Manager", type="primary"): 
+        st.session_state.show_bank_manager = True; 
+        st.rerun()
     st.stop()
 
 # ============================================================================
@@ -762,9 +906,12 @@ if st.session_state.get('show_profile_setup', False):
     with st.form("profile_setup_form"):
         gender = st.radio("Gender", ["Male", "Female", "Other", "Prefer not to say"], horizontal=True, key="modal_gender", label_visibility="collapsed")
         col1, col2, col3 = st.columns(3)
-        with col1: birth_month = st.selectbox("Month", ["January","February","March","April","May","June","July","August","September","October","November","December"], key="modal_month")
-        with col2: birth_day = st.selectbox("Day", list(range(1,32)), key="modal_day")
-        with col3: birth_year = st.selectbox("Year", list(range(datetime.now().year, datetime.now().year-120, -1)), key="modal_year")
+        with col1: 
+            birth_month = st.selectbox("Month", ["January","February","March","April","May","June","July","August","September","October","November","December"], key="modal_month")
+        with col2: 
+            birth_day = st.selectbox("Day", list(range(1,32)), key="modal_day")
+        with col3: 
+            birth_year = st.selectbox("Year", list(range(datetime.now().year, datetime.now().year-120, -1)), key="modal_year")
         account_for = st.radio("Account Type", ["For me", "For someone else"], key="modal_account_type", horizontal=True)
         
         if st.form_submit_button("Complete Profile", type="primary", use_container_width=True):
@@ -774,10 +921,13 @@ if st.session_state.get('show_profile_setup', False):
                     st.session_state.user_account['profile'].update({'gender': gender, 'birthdate': birthdate, 'timeline_start': birthdate})
                     st.session_state.user_account['account_type'] = "self" if account_for == "For me" else "other"
                     save_account_data(st.session_state.user_account)
-                st.session_state.show_profile_setup = False; st.rerun()
+                st.session_state.show_profile_setup = False; 
+                st.rerun()
         if st.form_submit_button("Skip for Now", use_container_width=True):
-            st.session_state.show_profile_setup = False; st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True); st.stop()
+            st.session_state.show_profile_setup = False; 
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True); 
+    st.stop()
 
 # ============================================================================
 # AUTHENTICATION UI
@@ -785,12 +935,15 @@ if st.session_state.get('show_profile_setup', False):
 
 if not st.session_state.logged_in:
     st.markdown('<div class="auth-container"><h1>Tell My Story</h1><p>Your Life Timeline • Preserve Your Legacy</p></div>', unsafe_allow_html=True)
-    if 'auth_tab' not in st.session_state: st.session_state.auth_tab = 'login'
+    if 'auth_tab' not in st.session_state: 
+        st.session_state.auth_tab = 'login'
     
     col1, col2 = st.columns(2)
-    with col1: st.button("🔐 Login", use_container_width=True, type="primary" if st.session_state.auth_tab=='login' else "secondary", 
+    with col1: 
+        st.button("🔐 Login", use_container_width=True, type="primary" if st.session_state.auth_tab=='login' else "secondary", 
                         on_click=lambda: st.session_state.update(auth_tab='login'))
-    with col2: st.button("📝 Sign Up", use_container_width=True, type="primary" if st.session_state.auth_tab=='signup' else "secondary",
+    with col2: 
+        st.button("📝 Sign Up", use_container_width=True, type="primary" if st.session_state.auth_tab=='signup' else "secondary",
                         on_click=lambda: st.session_state.update(auth_tab='signup'))
     st.divider()
     
@@ -803,20 +956,30 @@ if not st.session_state.logged_in:
                 if email and password:
                     result = authenticate_user(email, password)
                     if result["success"]:
-                        st.session_state.update(user_id=result["user_id"], user_account=result["user_record"],
-                                              logged_in=True, data_loaded=False, qb_manager=None, qb_manager_initialized=False)
-                        st.success("Login successful!"); st.rerun()
-                    else: st.error(f"Login failed: {result.get('error', 'Unknown error')}")
+                        st.session_state.update(user_id=result["user_id"], 
+                                              user_account=result["user_record"],
+                                              logged_in=True, 
+                                              data_loaded=False, 
+                                              qb_manager=None, 
+                                              qb_manager_initialized=False)
+                        st.success("Login successful!"); 
+                        st.rerun()
+                    else: 
+                        st.error(f"Login failed: {result.get('error', 'Unknown error')}")
     else:
         with st.form("signup_form"):
             st.subheader("Create New Account")
             col1, col2 = st.columns(2)
-            with col1: first_name = st.text_input("First Name*")
-            with col2: last_name = st.text_input("Last Name*")
+            with col1: 
+                first_name = st.text_input("First Name*")
+            with col2: 
+                last_name = st.text_input("Last Name*")
             email = st.text_input("Email Address*")
             col1, col2 = st.columns(2)
-            with col1: password = st.text_input("Password*", type="password")
-            with col2: confirm = st.text_input("Confirm Password*", type="password")
+            with col1: 
+                password = st.text_input("Password*", type="password")
+            with col2: 
+                confirm = st.text_input("Confirm Password*", type="password")
             accept = st.checkbox("I agree to the Terms*")
             
             if st.form_submit_button("Create Account", type="primary", use_container_width=True):
@@ -829,37 +992,63 @@ if not st.session_state.logged_in:
                 if not accept: errors.append("Must accept terms")
                 if get_account_data(email=email): errors.append("Email already exists")
                 
-                if errors: [st.error(e) for e in errors]
+                if errors: 
+                    [st.error(e) for e in errors]
                 else:
                     result = create_user_account({"first_name": first_name, "last_name": last_name, "email": email, "account_for": "self"}, password)
                     if result["success"]:
-                        send_welcome_email({"first_name": first_name, "email": email}, {"user_id": result["user_id"], "password": password})
-                        st.session_state.update(user_id=result["user_id"], user_account=result["user_record"],
-                                              logged_in=True, data_loaded=False, show_profile_setup=True,
-                                              qb_manager=None, qb_manager_initialized=False)
-                        st.success("Account created!"); st.balloons(); st.rerun()
-                    else: st.error(f"Error: {result.get('error', 'Unknown error')}")
+                        send_welcome_email({"first_name": first_name, "email": email}, 
+                                         {"user_id": result["user_id"], "password": password})
+                        st.session_state.update(user_id=result["user_id"], 
+                                              user_account=result["user_record"],
+                                              logged_in=True, 
+                                              data_loaded=False, 
+                                              show_profile_setup=True,
+                                              qb_manager=None, 
+                                              qb_manager_initialized=False)
+                        st.success("Account created!"); 
+                        st.balloons(); 
+                        st.rerun()
+                    else: 
+                        st.error(f"Error: {result.get('error', 'Unknown error')}")
     st.stop()
 
 # ============================================================================
 # MODAL HANDLING
 # ============================================================================
 
-if st.session_state.show_bank_manager: show_bank_manager(); st.stop()
-if st.session_state.show_bank_editor: show_bank_editor(); st.stop()
+if st.session_state.show_bank_manager: 
+    show_bank_manager(); 
+    st.stop()
+if st.session_state.show_bank_editor: 
+    show_bank_editor(); 
+    st.stop()
 if st.session_state.show_beta_reader and st.session_state.current_beta_feedback: 
     beta_reader.show_modal(st.session_state.current_beta_feedback, 
                           {"id": SESSIONS[st.session_state.current_session]["id"], 
                            "title": SESSIONS[st.session_state.current_session]["title"]},
-                          st.session_state.user_id, save_beta_feedback, 
+                          st.session_state.user_id, 
+                          save_beta_feedback, 
                           lambda: st.session_state.update(show_beta_reader=False, current_beta_feedback=None))
     st.stop()
-if st.session_state.show_vignette_detail: show_vignette_detail(); st.stop()
-if st.session_state.show_vignette_manager: show_vignette_manager(); st.stop()
-if st.session_state.show_vignette_modal: show_vignette_modal(); st.stop()
-if st.session_state.show_topic_browser: show_topic_browser(); st.stop()
-if st.session_state.show_session_manager: show_session_manager(); st.stop()
-if st.session_state.show_session_creator: show_session_creator(); st.stop()
+if st.session_state.show_vignette_detail: 
+    show_vignette_detail(); 
+    st.stop()
+if st.session_state.show_vignette_manager: 
+    show_vignette_manager(); 
+    st.stop()
+if st.session_state.show_vignette_modal: 
+    show_vignette_modal(); 
+    st.stop()
+if st.session_state.show_topic_browser: 
+    show_topic_browser(); 
+    st.stop()
+if st.session_state.show_session_manager: 
+    show_session_manager(); 
+    st.stop()
+if st.session_state.show_session_creator: 
+    show_session_creator(); 
+    st.stop()
 
 # ============================================================================
 # MAIN HEADER
@@ -878,13 +1067,19 @@ with st.sidebar:
     if st.session_state.user_account:
         profile = st.session_state.user_account['profile']
         st.success(f"✓ **{profile['first_name']} {profile['last_name']}**")
-    if st.button("📝 Edit Profile", use_container_width=True): st.session_state.show_profile_setup = True; st.rerun()
-    if st.button("🚪 Log Out", use_container_width=True): logout_user()
+    if st.button("📝 Edit Profile", use_container_width=True): 
+        st.session_state.show_profile_setup = True; 
+        st.rerun()
+    if st.button("🚪 Log Out", use_container_width=True): 
+        logout_user()
     
     st.divider()
     st.header("📚 Question Banks")
-    if st.button("📋 Bank Manager", use_container_width=True, type="primary"): st.session_state.show_bank_manager = True; st.rerun()
-    if st.session_state.get('current_bank_name'): st.info(f"**Current Bank:**\n{st.session_state.current_bank_name}")
+    if st.button("📋 Bank Manager", use_container_width=True, type="primary"): 
+        st.session_state.show_bank_manager = True; 
+        st.rerun()
+    if st.session_state.get('current_bank_name'): 
+        st.info(f"**Current Bank:**\n{st.session_state.current_bank_name}")
     
     st.divider()
     st.header("📖 Sessions")
@@ -895,19 +1090,30 @@ with st.sidebar:
             resp_cnt = len(sdata.get("questions", {}))
             total_q = len(s["questions"])
             status = "🟢" if resp_cnt == total_q and total_q > 0 else "🟡" if resp_cnt > 0 else "🔴"
-            if i == st.session_state.current_session: status = "▶️"
+            if i == st.session_state.current_session: 
+                status = "▶️"
             if st.button(f"{status} Session {sid}: {s['title']}", key=f"sel_sesh_{i}", use_container_width=True):
-                st.session_state.update(current_session=i, current_question=0, editing=False, current_question_override=None); st.rerun()
+                st.session_state.update(current_session=i, current_question=0, editing=False, current_question_override=None); 
+                st.rerun()
     
     st.divider()
     st.header("✨ Vignettes")
-    if st.button("📝 New Vignette", use_container_width=True): st.session_state.show_vignette_modal = True; st.session_state.editing_vignette_id = None; st.rerun()
-    if st.button("📖 View All Vignettes", use_container_width=True): st.session_state.show_vignette_manager = True; st.rerun()
+    if st.button("📝 New Vignette", use_container_width=True): 
+        st.session_state.show_vignette_modal = True; 
+        st.session_state.editing_vignette_id = None; 
+        st.rerun()
+    if st.button("📖 View All Vignettes", use_container_width=True): 
+        st.session_state.show_vignette_manager = True; 
+        st.rerun()
     
     st.divider()
     st.header("📖 Session Management")
-    if st.button("📋 All Sessions", use_container_width=True): st.session_state.show_session_manager = True; st.rerun()
-    if st.button("➕ Custom Session", use_container_width=True): st.session_state.show_session_creator = True; st.rerun()
+    if st.button("📋 All Sessions", use_container_width=True): 
+        st.session_state.show_session_manager = True; 
+        st.rerun()
+    if st.button("➕ Custom Session", use_container_width=True): 
+        st.session_state.show_session_creator = True; 
+        st.rerun()
     
     st.divider()
     st.subheader("📤 Export Options")
@@ -921,9 +1127,13 @@ with st.sidebar:
             sdata = st.session_state.responses.get(sid, {})
             for q, a in sdata.get("questions", {}).items():
                 export_item = {
-                    "question": q, "answer": a["answer"], "timestamp": a["timestamp"],
-                    "session_id": sid, "session_title": session["title"],
-                    "has_images": a.get("has_images", False), "image_count": a.get("image_count", 0),
+                    "question": q, 
+                    "answer": a["answer"], 
+                    "timestamp": a["timestamp"],
+                    "session_id": sid, 
+                    "session_title": session["title"],
+                    "has_images": a.get("has_images", False), 
+                    "image_count": a.get("image_count", 0),
                     "images": a.get("images", [])
                 }
                 # Add base64 encoded images for export
@@ -934,24 +1144,35 @@ with st.sidebar:
                         full_img = st.session_state.image_handler.get_image_html(img["id"])
                         if full_img:
                             export_item["embedded_images"].append({
-                                "id": img["id"], "caption": img.get("caption", ""),
-                                "base64": full_img["base64"], "html": full_img["html"]
+                                "id": img["id"], 
+                                "caption": img.get("caption", ""),
+                                "base64": full_img["base64"], 
+                                "html": full_img["html"]
                             })
                 export_data.append(export_item)
         
         if export_data:
             complete_data = {
-                "user": st.session_state.user_id, "user_profile": st.session_state.user_account.get('profile', {}),
-                "stories": export_data, "export_date": datetime.now().isoformat(),
-                "summary": {"total_stories": len(export_data), "total_sessions": len(set(s['session_id'] for s in export_data))}
+                "user": st.session_state.user_id, 
+                "user_profile": st.session_state.user_account.get('profile', {}),
+                "stories": export_data, 
+                "export_date": datetime.now().isoformat(),
+                "summary": {
+                    "total_stories": len(export_data), 
+                    "total_sessions": len(set(s['session_id'] for s in export_data))
+                }
             }
             json_data = json.dumps(complete_data, indent=2)
             
-            st.download_button(label="📥 Export Complete Data", data=json_data,
+            st.download_button(label="📥 Export Complete Data", 
+                              data=json_data,
                               file_name=f"Tell_My_Story_Complete_{st.session_state.user_id}.json",
-                              mime="application/json", use_container_width=True)
-        else: st.warning("No data to export yet!")
-    else: st.warning("Please log in to export your data.")
+                              mime="application/json", 
+                              use_container_width=True)
+        else: 
+            st.warning("No data to export yet!")
+    else: 
+        st.warning("Please log in to export your data.")
     
     st.divider()
     st.subheader("⚠️ Clear Data")
@@ -961,19 +1182,29 @@ with st.sidebar:
             sid = SESSIONS[st.session_state.current_session]["id"]
             st.session_state.responses[sid]["questions"] = {}
             save_user_data(st.session_state.user_id, st.session_state.responses)
-            st.session_state.confirming_clear = None; st.rerun()
-        if st.button("❌ Cancel", key="can_sesh"): st.session_state.confirming_clear = None; st.rerun()
+            st.session_state.confirming_clear = None; 
+            st.rerun()
+        if st.button("❌ Cancel", key="can_sesh"): 
+            st.session_state.confirming_clear = None; 
+            st.rerun()
     elif st.session_state.confirming_clear == "all":
         st.warning("**Delete ALL answers for ALL sessions?**")
         if st.button("✅ Confirm All", type="primary", key="conf_all"): 
             for s in SESSIONS:
                 st.session_state.responses[s["id"]]["questions"] = {}
             save_user_data(st.session_state.user_id, st.session_state.responses)
-            st.session_state.confirming_clear = None; st.rerun()
-        if st.button("❌ Cancel", key="can_all"): st.session_state.confirming_clear = None; st.rerun()
+            st.session_state.confirming_clear = None; 
+            st.rerun()
+        if st.button("❌ Cancel", key="can_all"): 
+            st.session_state.confirming_clear = None; 
+            st.rerun()
     else:
-        if st.button("🗑️ Clear Session", use_container_width=True): st.session_state.confirming_clear = "session"; st.rerun()
-        if st.button("🔥 Clear All", use_container_width=True): st.session_state.confirming_clear = "all"; st.rerun()
+        if st.button("🗑️ Clear Session", use_container_width=True): 
+            st.session_state.confirming_clear = "session"; 
+            st.rerun()
+        if st.button("🔥 Clear All", use_container_width=True): 
+            st.session_state.confirming_clear = "all"; 
+            st.rerun()
     
     st.divider()
     st.subheader("🔍 Search Your Stories")
@@ -991,16 +1222,20 @@ with st.sidebar:
                     if st.button(f"Go to Session", key=f"srch_go_{i}_{r['session_id']}"):
                         for idx, s in enumerate(SESSIONS):
                             if s["id"] == r['session_id']:
-                                st.session_state.update(current_session=idx, current_question_override=r['question']); st.rerun()
+                                st.session_state.update(current_session=idx, current_question_override=r['question']); 
+                                st.rerun()
                     st.divider()
-                if len(results) > 10: st.info(f"... and {len(results)-10} more matches")
-        else: st.info("No matches found")
+                if len(results) > 10: 
+                    st.info(f"... and {len(results)-10} more matches")
+        else: 
+            st.info("No matches found")
 
 # ============================================================================
-# MAIN CONTENT AREA - MODIFIED WITH IMAGE UPLOAD
+# MAIN CONTENT AREA - IMAGES WITH CAPTIONS BELOW
 # ============================================================================
 
-if st.session_state.current_session >= len(SESSIONS): st.session_state.current_session = 0
+if st.session_state.current_session >= len(SESSIONS): 
+    st.session_state.current_session = 0
 
 current_session = SESSIONS[st.session_state.current_session]
 current_session_id = current_session["id"]
@@ -1009,7 +1244,8 @@ if st.session_state.current_question_override:
     current_question_text = st.session_state.current_question_override
     question_source = "custom"
 else:
-    if st.session_state.current_question >= len(current_session["questions"]): st.session_state.current_question = 0
+    if st.session_state.current_question >= len(current_session["questions"]): 
+        st.session_state.current_question = 0
     current_question_text = current_session["questions"][st.session_state.current_question]
     question_source = "regular"
 
@@ -1021,7 +1257,9 @@ with col1:
     sdata = st.session_state.responses.get(current_session_id, {})
     answered = len(sdata.get("questions", {}))
     total = len(current_session["questions"])
-    if total > 0: st.progress(min(answered/total, 1.0)); st.caption(f"📝 Topics explored: {answered}/{total} ({answered/total*100:.0f}%)")
+    if total > 0: 
+        st.progress(min(answered/total, 1.0))
+        st.caption(f"📝 Topics explored: {answered}/{total} ({answered/total*100:.0f}%)")
 with col2:
     if question_source == "custom":
         st.markdown(f'<div style="margin-top:1rem;color:{"#9b59b6" if "Vignette:" in st.session_state.current_question_override else "#ff6b00"};">{"📝 Vignette" if "Vignette:" in st.session_state.current_question_override else "✨ Custom Topic"}</div>', unsafe_allow_html=True)
@@ -1029,41 +1267,119 @@ with col2:
         st.markdown(f'<div style="margin-top:1rem;">Topic {st.session_state.current_question+1} of {len(current_session["questions"])}</div>', unsafe_allow_html=True)
 
 st.markdown(f'<div class="question-box">{current_question_text}</div>', unsafe_allow_html=True)
+
 if question_source == "regular":
     st.markdown(f'<div class="chapter-guidance">{current_session.get("guidance", "")}</div>', unsafe_allow_html=True)
 else:
-    st.info("📝 **Vignette Mode** - Write a short, focused story about a specific moment or memory." if "Vignette:" in current_question_text else "✨ **Custom Topic** - Write about whatever comes to mind!")
+    if "Vignette:" in current_question_text:
+        st.info("📝 **Vignette Mode** - Write a short, focused story about a specific moment or memory.")
+    else:
+        st.info("✨ **Custom Topic** - Write about whatever comes to mind!")
 
-st.write(""); st.write("")
+st.write("")
+st.write("")
 
 # Get existing answer and images
 existing_answer = ""
+existing_answer_data = None
 if current_session_id in st.session_state.responses:
     if current_question_text in st.session_state.responses[current_session_id]["questions"]:
-        existing_answer = st.session_state.responses[current_session_id]["questions"][current_question_text]["answer"]
+        existing_answer_data = st.session_state.responses[current_session_id]["questions"][current_question_text]
+        existing_answer = existing_answer_data.get("answer", "")
 
 # Initialize image handler
 if st.session_state.logged_in:
     init_image_handler()
 
-# TEXT AREA for writing
+# ============================================================================
+# DISPLAY EXISTING IMAGES WITH CAPTIONS BELOW (NOT ABOVE)
+# ============================================================================
+if st.session_state.logged_in and st.session_state.image_handler:
+    existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text)
+    
+    if existing_images:
+        st.markdown("### 📸 Photos in this story:")
+        st.markdown("---")
+        
+        # Display images in a grid with captions BELOW each image
+        cols = st.columns(min(len(existing_images), 3))
+        for idx, img in enumerate(existing_images):
+            with cols[idx % 3]:
+                # Image FIRST
+                st.markdown(img.get("full_html", ""), unsafe_allow_html=True)
+                
+                # Caption BELOW the image
+                if img.get("caption"):
+                    st.markdown(f"""
+                    <div style="margin-top: 5px; margin-bottom: 10px; padding: 8px; background-color: #f9f9f9; border-left: 3px solid #36cfc9; border-radius: 0 5px 5px 0;">
+                        <span style="font-weight: bold; color: #0066cc;">📝 Caption:</span> 
+                        <span style="font-style: italic;">{img['caption']}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.caption("_No caption_")
+                
+                # Delete button below caption
+                if st.button(f"🗑️ Remove Photo", key=f"del_img_{img['id']}_{idx}"):
+                    st.session_state.image_handler.delete_image(img['id'])
+                    st.rerun()
+        
+        st.markdown("---")
+
+# ============================================================================
+# TEXT AREA FOR WRITING
+# ============================================================================
+st.markdown("### ✍️ Your Story")
+
 user_input = st.text_area(
     "Type your answer here...",
     value=existing_answer,
     key=f"ans_{current_session_id}_{hash(current_question_text)}",
-    height=500,
+    height=400,
     placeholder="Write your detailed response here...",
-    label_visibility="visible"
+    label_visibility="collapsed"
 )
 
-# IMAGE UPLOAD SECTION - Shows below the text area
+# ============================================================================
+# IMAGE UPLOAD SECTION - BELOW THE TEXT AREA
+# ============================================================================
 if st.session_state.logged_in and st.session_state.image_handler:
-    st.markdown("---")
-    existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text)
-    st.session_state.image_handler.render_image_uploader(current_session_id, current_question_text, existing_images)
+    st.markdown("### 📤 Add New Photos")
+    st.caption("Upload photos that illustrate this memory (JPG, PNG)")
+    
+    uploaded_file = st.file_uploader(
+        "Choose image...", 
+        type=['jpg', 'jpeg', 'png'], 
+        key=f"up_{current_session_id}_{hash(current_question_text)}",
+        label_visibility="collapsed"
+    )
+    
+    if uploaded_file:
+        caption = st.text_input(
+            "Caption / Description:",
+            placeholder="What does this photo show? When was it taken?",
+            key=f"cap_{current_session_id}_{hash(current_question_text)}"
+        )
+        
+        if st.button("📤 Upload Photo", key=f"btn_{current_session_id}_{hash(current_question_text)}"):
+            with st.spinner("Uploading..."):
+                result = st.session_state.image_handler.save_image(
+                    uploaded_file, 
+                    current_session_id, 
+                    current_question_text, 
+                    caption
+                )
+                if result:
+                    st.success("Photo uploaded!")
+                    st.rerun()
+                else:
+                    st.error("Upload failed")
+    
     st.markdown("---")
 
+# ============================================================================
 # SAVE BUTTONS
+# ============================================================================
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     if st.button("💾 Save", key="save_ans", type="primary", use_container_width=True):
@@ -1071,25 +1387,35 @@ with col1:
             with st.spinner("Saving..."):
                 corrected = auto_correct_text(user_input)
                 if save_response(current_session_id, current_question_text, corrected):
-                    st.success("Saved!"); time.sleep(0.5); st.rerun()
-                else: st.error("Failed to save")
-        else: st.warning("Please write something!")
+                    st.success("Saved!")
+                    time.sleep(0.5)
+                    st.rerun()
+                else: 
+                    st.error("Failed to save")
+        else: 
+            st.warning("Please write something!")
 with col2:
     if existing_answer:
         if st.button("🗑️ Delete", key="del_ans", use_container_width=True):
             if delete_response(current_session_id, current_question_text):
-                st.success("Deleted!"); st.rerun()
-    else: st.button("🗑️ Delete", key="del_dis", disabled=True, use_container_width=True)
+                st.success("Deleted!")
+                st.rerun()
+    else: 
+        st.button("🗑️ Delete", key="del_dis", disabled=True, use_container_width=True)
 with col3:
     nav1, nav2 = st.columns(2)
     with nav1: 
         prev_dis = st.session_state.current_question == 0
         if st.button("← Previous", disabled=prev_dis, key="prev_btn", use_container_width=True):
-            if not prev_dis: st.session_state.update(current_question=st.session_state.current_question-1, editing=False, current_question_override=None); st.rerun()
+            if not prev_dis: 
+                st.session_state.update(current_question=st.session_state.current_question-1, editing=False, current_question_override=None)
+                st.rerun()
     with nav2:
         next_dis = st.session_state.current_question >= len(current_session["questions"]) - 1
         if st.button("Next →", disabled=next_dis, key="next_btn", use_container_width=True):
-            if not next_dis: st.session_state.update(current_question=st.session_state.current_question+1, editing=False, current_question_override=None); st.rerun()
+            if not next_dis: 
+                st.session_state.update(current_question=st.session_state.current_question+1, editing=False, current_question_override=None)
+                st.rerun()
 
 st.divider()
 
@@ -1105,10 +1431,12 @@ total_q = len(current_session["questions"])
 if answered_cnt == total_q and total_q > 0:
     st.success("✅ Session complete - ready for beta reading!")
     prev_fb = get_previous_beta_feedback(st.session_state.user_id, current_session_id)
-    if prev_fb: st.info(f"📖 Previous feedback from {datetime.fromisoformat(prev_fb['generated_at']).strftime('%B %d')}")
+    if prev_fb: 
+        st.info(f"📖 Previous feedback from {datetime.fromisoformat(prev_fb['generated_at']).strftime('%B %d')}")
     
     col1, col2 = st.columns([2, 1])
-    with col1: fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type")
+    with col1: 
+        fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type")
     with col2:
         if st.button("🦋 Get Beta Reader Feedback", use_container_width=True, type="primary"):
             with st.spinner("Analyzing..."):
@@ -1116,12 +1444,20 @@ if answered_cnt == total_q and total_q > 0:
                     session_text = beta_reader.get_session_full_text(current_session_id, st.session_state.responses) if beta_reader else ""
                     if session_text.strip():
                         fb = generate_beta_reader_feedback(current_session["title"], session_text, fb_type)
-                        if "error" not in fb: st.session_state.current_beta_feedback = fb; st.session_state.show_beta_reader = True; st.rerun()
-                        else: st.error(f"Failed: {fb['error']}")
-                    else: st.error("No content to analyze")
+                        if "error" not in fb: 
+                            st.session_state.current_beta_feedback = fb
+                            st.session_state.show_beta_reader = True
+                            st.rerun()
+                        else: 
+                            st.error(f"Failed: {fb['error']}")
+                    else: 
+                        st.error("No content to analyze")
     if prev_fb and st.button("📖 View Previous Feedback", use_container_width=True):
-        st.session_state.current_beta_feedback = prev_fb; st.session_state.show_beta_reader = True; st.rerun()
-else: st.info(f"Complete all {total_q} topics in this session to get beta reader feedback.")
+        st.session_state.current_beta_feedback = prev_fb
+        st.session_state.show_beta_reader = True
+        st.rerun()
+else: 
+    st.info(f"Complete all {total_q} topics in this session to get beta reader feedback.")
 
 st.divider()
 
@@ -1139,7 +1475,10 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-if st.button("✏️ Change Word Target", key="edit_target", use_container_width=True): st.session_state.editing_word_target = not st.session_state.editing_word_target; st.rerun()
+if st.button("✏️ Change Word Target", key="edit_target", use_container_width=True): 
+    st.session_state.editing_word_target = not st.session_state.editing_word_target
+    st.rerun()
+
 if st.session_state.editing_word_target:
     new_target = st.number_input("Target words:", min_value=100, max_value=5000, value=progress_info['target'], key="target_edit")
     col_s, col_c = st.columns(2)
@@ -1147,15 +1486,19 @@ if st.session_state.editing_word_target:
         if st.button("💾 Save", key="save_target", type="primary", use_container_width=True):
             st.session_state.responses[current_session_id]["word_target"] = new_target
             save_user_data(st.session_state.user_id, st.session_state.responses)
-            st.session_state.editing_word_target = False; st.rerun()
+            st.session_state.editing_word_target = False
+            st.rerun()
     with col_c:
-        if st.button("❌ Cancel", key="cancel_target", use_container_width=True): st.session_state.editing_word_target = False; st.rerun()
+        if st.button("❌ Cancel", key="cancel_target", use_container_width=True): 
+            st.session_state.editing_word_target = False
+            st.rerun()
 
 st.divider()
 
 # Stats
 col1, col2, col3, col4 = st.columns(4)
-with col1: st.metric("Total Words", sum(calculate_author_word_count(s["id"]) for s in SESSIONS))
+with col1: 
+    st.metric("Total Words", sum(calculate_author_word_count(s["id"]) for s in SESSIONS))
 with col2: 
     unique_q = set()
     for s in SESSIONS:
@@ -1163,12 +1506,15 @@ with col2:
             unique_q.add((s["id"], q))
     comp = sum(1 for s in SESSIONS if len([x for (sid,x) in unique_q if sid == s["id"]]) == len(s["questions"]))
     st.metric("Completed Sessions", f"{comp}/{len(SESSIONS)}")
-with col3: st.metric("Topics Explored", f"{len(unique_q)}/{sum(len(s['questions']) for s in SESSIONS)}")
-with col4: st.metric("Total Answers", sum(len(st.session_state.responses.get(s["id"], {}).get("questions", {})) for s in SESSIONS))
+with col3: 
+    st.metric("Topics Explored", f"{len(unique_q)}/{sum(len(s['questions']) for s in SESSIONS)}")
+with col4: 
+    st.metric("Total Answers", sum(len(st.session_state.responses.get(s["id"], {}).get("questions", {})) for s in SESSIONS))
 
 st.markdown("---")
 if st.session_state.user_account:
     profile = st.session_state.user_account['profile']
     age = (datetime.now() - datetime.fromisoformat(st.session_state.user_account['created_at'])).days
     st.caption(f"Tell My Story Timeline • 👤 {profile['first_name']} {profile['last_name']} • 📅 Account Age: {age} days • 📚 Bank: {st.session_state.get('current_bank_name', 'None')}")
-else: st.caption(f"Tell My Story Timeline • User: {st.session_state.user_id}")
+else: 
+    st.caption(f"Tell My Story Timeline • User: {st.session_state.user_id}")
