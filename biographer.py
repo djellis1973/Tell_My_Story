@@ -1368,18 +1368,28 @@ if f"{editor_key}_content" not in st.session_state:
     if existing_answer and existing_answer != "<p>Start writing your story here...</p>":
         st.session_state[f"{editor_key}_content"] = existing_answer
     else:
-        st.session_state[f"{editor_key}_content"] = "<p>Start writing your story here...</p>"
+        st.session_state[f"{editor_key}_content"] = ""
 
-# Display the editor - FIXED PARAMETERS
+# Display the editor - SIMPLEST POSSIBLE SYNTAX
 user_input = st_quill(
     st.session_state[f"{editor_key}_content"],
-    key=editor_key,  # key is a named parameter, not positional
+    editor_key,
     height=500
 )
 
 # Update session state when editor changes
-if user_input:
+if user_input is not None:
     st.session_state[f"{editor_key}_content"] = user_input
+
+try:
+    user_input = st_quill(
+        st.session_state[f"{editor_key}_content"],
+        editor_key,
+        height=500
+    )
+except Exception as e:
+    st.error(f"Quill error: {type(e).__name__}: {str(e)}")
+    st.stop()
 
 # ============================================================================
 # IMAGE UPLOAD SECTION - WITH INSERT BUTTON
