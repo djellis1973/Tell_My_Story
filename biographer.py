@@ -446,7 +446,7 @@ def save_user_data(user_id, responses_data):
         return False
 
 # ============================================================================
-# CORE RESPONSE FUNCTIONS - MODIFIED TO HANDLE HTML FROM QUILL
+# CORE RESPONSE FUNCTIONS - MODIFIED TO PROPERLY SAVE HTML WITH IMAGES
 # ============================================================================
 
 def save_response(session_id, question, answer):
@@ -454,7 +454,7 @@ def save_response(session_id, question, answer):
     if not user_id: 
         return False
     
-    # Strip HTML tags for word count
+    # Strip HTML tags for word count only
     text_only = re.sub(r'<[^>]+>', '', answer) if answer else ""
     
     if st.session_state.user_account:
@@ -474,19 +474,14 @@ def save_response(session_id, question, answer):
             "word_target": session_data.get("word_target", DEFAULT_WORD_TARGET)
         }
     
-    # Get images for this answer (for backward compatibility)
-    images = []
-    if st.session_state.image_handler:
-        images = st.session_state.image_handler.get_images_for_answer(session_id, question)
-    
+    # Save the answer - PRESERVE FULL HTML WITH BASE64 IMAGES
     st.session_state.responses[session_id]["questions"][question] = {
-        "answer": answer,  # Store HTML directly from Quill
+        "answer": answer,  # Store HTML directly from Quill with base64 images
         "question": question, 
         "timestamp": datetime.now().isoformat(),
-        "answer_index": 1, 
-        "has_images": len(images) > 0 or ('<img' in answer),
-        "image_count": len(images),
-        "images": [{"id": img["id"], "caption": img.get("caption", "")} for img in images]
+        "answer_index": 1,
+        "has_images": '<img' in answer,
+        "image_count": answer.count('<img')
     }
     
     success = save_user_data(user_id, st.session_state.responses)
@@ -673,7 +668,7 @@ def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
         if sid not in st.session_state.responses:
             st.session_state.responses[sid] = {
                 "title": s["title"], 
-                "questions": {}, 
+                "questions": {},
                 "summary": "",
                 "completed": False, 
                 "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
@@ -905,7 +900,9 @@ if not st.session_state.qb_manager_initialized:
     initialize_question_bank()
 SESSIONS = st.session_state.get('current_question_bank', [])
 
-# Load user data
+# ============================================================================
+# LOAD USER DATA - MODIFIED TO PROPERLY LOAD HTML WITH IMAGES
+# ============================================================================
 if st.session_state.logged_in and st.session_state.user_id and not st.session_state.data_loaded:
     user_data = load_user_data(st.session_state.user_id)
     if "responses" in user_data:
@@ -914,8 +911,10 @@ if st.session_state.logged_in and st.session_state.user_id and not st.session_st
                 sid = int(sid_str)
             except: 
                 continue
-            if sid in st.session_state.responses and "questions" in sdata and sdata["questions"]:
-                st.session_state.responses[sid]["questions"] = sdata["questions"]
+            if sid in st.session_state.responses and "questions" in sdata:
+                # Load the full HTML with base64 images - don't filter anything
+                for q, a in sdata["questions"].items():
+                    st.session_state.responses[sid]["questions"][q] = a
     st.session_state.data_loaded = True
     init_image_handler()
 
@@ -1262,7 +1261,7 @@ with st.sidebar:
             st.info("No matches found")
 
 # ============================================================================
-# MAIN CONTENT AREA - SINGLE QUILL EDITOR WITH INSERT BUTTON
+# MAIN CONTENT AREA - SINGLE QUILL EDITOR - CLEAN VERSION, NO PLACEHOLDER
 # ============================================================================
 
 if st.session_state.current_session >= len(SESSIONS): 
@@ -1322,26 +1321,21 @@ if st.session_state.logged_in:
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
 # ============================================================================
-# QUILL EDITOR - FINAL WORKING VERSION
+# QUILL EDITOR - FINAL CLEAN VERSION - NO PLACEHOLDER
 # ============================================================================
 
 # Create a unique key for this editor
 editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
 content_key = f"{editor_key}_content"
 
-# Initialize session state for this editor's content
+# Initialize session state for this editor's content - NO PLACEHOLDER TEXT
 if content_key not in st.session_state:
-    if existing_answer and existing_answer != "<p>Start writing your story here...</p>":
+    if existing_answer:
         st.session_state[content_key] = existing_answer
     else:
-        st.session_state[content_key] = ""
+        st.session_state[content_key] = ""  # Empty string, not placeholder
 
 st.markdown("### ✍️ Your Story")
-st.markdown("""
-<div style="background-color: #f0f8ff; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #36cfc9;">
-    📸 <strong>Drag & drop images</strong> directly into the editor.
-</div>
-""", unsafe_allow_html=True)
 
 # ONE Quill editor - MINIMAL PARAMETERS
 content = st_quill(
@@ -1388,10 +1382,6 @@ if st.session_state.logged_in and st.session_state.image_handler:
                     
                     # Get current content from session state
                     current_content = st.session_state.get(content_key, "")
-                    
-                    # Remove default placeholder if present
-                    if current_content == "<p>Start writing your story here...</p>":
-                        current_content = ""
                     
                     # Append image + caption to editor
                     if current_content:
@@ -1448,7 +1438,7 @@ if st.session_state.logged_in and st.session_state.image_handler:
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     if st.button("💾 Save Story", key="save_ans", type="primary", use_container_width=True):
-        if user_input and user_input.strip() and user_input != "<p><br></p>" and user_input != "<p>Start writing your story here...</p>":
+        if user_input and user_input.strip() and user_input != "<p><br></p>":
             with st.spinner("Saving your story..."):
                 if save_response(current_session_id, current_question_text, user_input):
                     st.success("✅ Story saved!")
@@ -1459,7 +1449,7 @@ with col1:
         else: 
             st.warning("Please write something!")
 with col2:
-    if existing_answer and existing_answer != "<p>Start writing your story here...</p>":
+    if existing_answer and existing_answer != "<p><br></p>":
         if st.button("🗑️ Delete Story", key="del_ans", use_container_width=True):
             if delete_response(current_session_id, current_question_text):
                 st.success("✅ Story deleted!")
@@ -1486,7 +1476,7 @@ st.divider()
 # ============================================================================
 # PREVIEW SECTION - Show rendered HTML
 # ============================================================================
-if user_input and user_input != "<p><br></p>" and user_input != "<p>Start writing your story here...</p>":
+if user_input and user_input != "<p><br></p>":
     with st.expander("👁️ Preview your story", expanded=False):
         st.markdown("### 📖 Preview")
         st.markdown(user_input, unsafe_allow_html=True)
