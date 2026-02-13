@@ -1575,42 +1575,42 @@ st.markdown("---")
 if st.session_state.logged_in and st.session_state.image_handler:
     
     if existing_images:
-    st.markdown("### 📸 Your Uploaded Photos")
-    st.markdown("*Click Insert to add the photo and caption to your story*")
-    
-    for idx, img in enumerate(existing_images):
-        col1, col2, col3 = st.columns([2, 3, 1])
+        st.markdown("### 📸 Your Uploaded Photos")
+        st.markdown("*Click Insert to add the photo and caption to your story*")
         
-        with col1:
-            # Use st.image instead of raw HTML for reliable display
-            if img.get("thumb_html"):
-                # Extract base64 from the HTML
-                html_content = img.get("thumb_html", "")
-                import re
-                match = re.search(r'src="data:image/jpeg;base64,([^"]+)"', html_content)
-                if match:
-                    b64 = match.group(1)
-                    st.image(f"data:image/jpeg;base64,{b64}", use_container_width=True)
-        
-        with col2:
-            caption_text = img.get("caption", "")
-            if caption_text:
-                st.markdown(f"**📝 Caption:** {caption_text}")
-            else:
-                st.markdown("*No caption*")
-        
-        with col3:
-            if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
-                # Get full image HTML
-                full_html = img.get("full_html", "")
-                if full_html:
-                    current_content = st.session_state.get(content_key, "")
-                    if current_content and current_content != "<p><br></p>":
-                        new_content = current_content + "<br><br>" + full_html
-                    else:
-                        new_content = full_html
-                    st.session_state[content_key] = new_content
-                    st.rerun()
+        for idx, img in enumerate(existing_images):
+            col1, col2, col3 = st.columns([2, 3, 1])
+            
+            with col1:
+                # Use st.image instead of raw HTML for reliable display
+                if img.get("thumb_html"):
+                    # Extract base64 from the HTML
+                    html_content = img.get("thumb_html", "")
+                    import re
+                    match = re.search(r'src="data:image/jpeg;base64,([^"]+)"', html_content)
+                    if match:
+                        b64 = match.group(1)
+                        st.image(f"data:image/jpeg;base64,{b64}", use_container_width=True)
+            
+            with col2:
+                caption_text = img.get("caption", "")
+                if caption_text:
+                    st.markdown(f"**📝 Caption:** {caption_text}")
+                else:
+                    st.markdown("*No caption*")
+            
+            with col3:
+                if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
+                    # Get full image HTML
+                    full_html = img.get("full_html", "")
+                    if full_html:
+                        current_content = st.session_state.get(content_key, "")
+                        if current_content and current_content != "<p><br></p>":
+                            new_content = current_content + "<br><br>" + full_html
+                        else:
+                            new_content = full_html
+                        st.session_state[content_key] = new_content
+                        st.rerun()
         
         st.markdown("---")
     
