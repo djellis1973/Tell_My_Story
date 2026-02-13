@@ -21,7 +21,7 @@ import io
 # IMPORT QUILL RICH TEXT EDITOR
 # ============================================================================
 try:
-    from streamlit_quill import st_quill
+    from streamlit_quill import streamlit_quill as st_quill
     QUILL_AVAILABLE = True
 except ImportError:
     st.error("❌ Please install streamlit-quill: add 'streamlit-quill' to requirements.txt")
