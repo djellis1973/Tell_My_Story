@@ -1357,8 +1357,10 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# QUILL RICH TEXT EDITOR
+# QUILL RICH TEXT EDITOR - DOCUMENTATION VERSION
 # ============================================================================
+
+from streamlit_quill import st_quill
 
 # Create a unique key for this editor
 editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
@@ -1370,26 +1372,19 @@ if f"{editor_key}_content" not in st.session_state:
     else:
         st.session_state[f"{editor_key}_content"] = ""
 
-# Display the editor - SIMPLEST POSSIBLE SYNTAX
-user_input = st_quill(
-    st.session_state[f"{editor_key}_content"],
-    editor_key,
-    height=500
+# Display the editor - EXACT DOCUMENTATION SYNTAX
+content = st_quill(
+    value=st.session_state[f"{editor_key}_content"],
+    key=editor_key,
+    height=500,
+    placeholder="Write your story here..."
 )
 
 # Update session state when editor changes
-if user_input is not None:
-    st.session_state[f"{editor_key}_content"] = user_input
-
-try:
-    user_input = st_quill(
-        st.session_state[f"{editor_key}_content"],
-        editor_key,
-        height=500
-    )
-except Exception as e:
-    st.error(f"Quill error: {type(e).__name__}: {str(e)}")
-    st.stop()
+if content != st.session_state[f"{editor_key}_content"]:
+    st.session_state[f"{editor_key}_content"] = content
+    
+user_input = content
 
 # ============================================================================
 # IMAGE UPLOAD SECTION - WITH INSERT BUTTON
