@@ -543,7 +543,7 @@ def logout_user():
     st.rerun()
 
 # ============================================================================
-# NARRATIVE GPS PROFILE SECTION
+# NARRATIVE GPS PROFILE SECTION (UPDATED - NO SQUARE BOXES)
 # ============================================================================
 def render_narrative_gps():
     """Render the Narrative GPS questionnaire in the profile"""
@@ -556,13 +556,16 @@ def render_narrative_gps():
     gps = st.session_state.user_account['narrative_gps']
     
     with st.expander("📖 Section 1: The Book Itself (Project Scope)", expanded=True):
+        st.markdown("**BOOK TITLE (Working or Final):**")
         gps['book_title'] = st.text_input(
-            "BOOK TITLE (Working or Final):",
+            "What's your working title? If unsure, what feeling or idea should the title convey?",
             value=gps.get('book_title', ''),
+            label_visibility="collapsed",
             placeholder="What's your working title? If unsure, what feeling or idea should the title convey?",
             key="gps_title"
         )
         
+        st.markdown("**BOOK GENRE/CATEGORY:**")
         genre_options = ["", "Memoir", "Autobiography", "Family History", "Business/Legacy Book", "Other"]
         genre_index = 0
         if gps.get('genre') in genre_options:
@@ -572,11 +575,13 @@ def render_narrative_gps():
             "BOOK GENRE/CATEGORY:",
             options=genre_options,
             index=genre_index,
+            label_visibility="collapsed",
             key="gps_genre"
         )
         if gps['genre'] == "Other":
             gps['genre_other'] = st.text_input("Please specify:", value=gps.get('genre_other', ''), key="gps_genre_other")
         
+        st.markdown("**BOOK LENGTH VISION:**")
         length_options = ["", "A short book (100-150 pages)", "Standard length (200-300 pages)", "Comprehensive (300+ pages)"]
         length_index = 0
         if gps.get('book_length') in length_options:
@@ -586,16 +591,20 @@ def render_narrative_gps():
             "BOOK LENGTH VISION:",
             options=length_options,
             index=length_index,
+            label_visibility="collapsed",
             key="gps_length"
         )
         
+        st.markdown("**TIMELINE & DEADLINES:**")
         gps['timeline'] = st.text_area(
-            "TIMELINE & DEADLINES:",
+            "Do you have a target publication date or event this book is tied to? (e.g., birthday, retirement, anniversary)",
             value=gps.get('timeline', ''),
+            label_visibility="collapsed",
             placeholder="Do you have a target publication date or event this book is tied to? (e.g., birthday, retirement, anniversary)",
             key="gps_timeline"
         )
         
+        st.markdown("**COMPLETION STATUS:**")
         completion_options = ["", "Notes only", "Partial chapters", "Full draft"]
         completion_index = 0
         if gps.get('completion_status') in completion_options:
@@ -605,6 +614,7 @@ def render_narrative_gps():
             "COMPLETION STATUS:",
             options=completion_options,
             index=completion_index,
+            label_visibility="collapsed",
             key="gps_completion"
         )
     
@@ -625,7 +635,7 @@ def render_narrative_gps():
         
         for purpose in purposes_options:
             if st.checkbox(
-                f"□ {purpose}",
+                purpose,
                 value=purpose in gps.get('purposes', []),
                 key=f"gps_purpose_{purpose}"
             ):
@@ -667,9 +677,11 @@ def render_narrative_gps():
         )
         
         st.markdown("---")
+        st.markdown("**THE READER TAKEAWAY:**")
         gps['reader_takeaway'] = st.text_area(
-            "THE READER TAKEAWAY:",
+            "What do you want readers to feel, think, or do after finishing your book?",
             value=gps.get('reader_takeaway', ''),
+            label_visibility="collapsed",
             placeholder="What do you want readers to feel, think, or do after finishing your book?",
             key="gps_takeaway"
         )
@@ -690,7 +702,7 @@ def render_narrative_gps():
         
         for voice in voice_options:
             if st.checkbox(
-                f"□ {voice}",
+                voice,
                 value=voice in gps.get('narrative_voices', []),
                 key=f"gps_voice_{voice}"
             ):
@@ -703,13 +715,17 @@ def render_narrative_gps():
         gps['voice_other'] = st.text_input("Other:", value=gps.get('voice_other', ''), key="gps_voice_other")
         
         st.markdown("---")
+        st.markdown("**EMOTIONAL TONE:**")
         gps['emotional_tone'] = st.text_area(
-            "EMOTIONAL TONE:",
+            "Should readers laugh? Cry? Feel inspired? Get angry? All of the above?",
             value=gps.get('emotional_tone', ''),
+            label_visibility="collapsed",
             placeholder="Should readers laugh? Cry? Feel inspired? Get angry? All of the above?",
             key="gps_emotional"
         )
         
+        st.markdown("---")
+        st.markdown("**LANGUAGE STYLE:**")
         language_options = ["", "Simple, everyday language", "Rich, descriptive prose", "Short, punchy chapters", "Long, flowing narratives"]
         language_index = 0
         if gps.get('language_style') in language_options:
@@ -719,10 +735,12 @@ def render_narrative_gps():
             "LANGUAGE STYLE:",
             options=language_options,
             index=language_index,
+            label_visibility="collapsed",
             key="gps_language"
         )
     
     with st.expander("📋 Section 4: Content Parameters (The 'What')", expanded=False):
+        st.markdown("**TIME COVERAGE:**")
         time_options = ["", "Your entire life", "A specific era/decade", "One defining experience", "Your career/business journey"]
         time_index = 0
         if gps.get('time_coverage') in time_options:
@@ -732,13 +750,16 @@ def render_narrative_gps():
             "TIME COVERAGE:",
             options=time_options,
             index=time_index,
+            label_visibility="collapsed",
             key="gps_time"
         )
         
         st.markdown("---")
+        st.markdown("**SENSITIVE MATERIAL:**")
         gps['sensitive_material'] = st.text_area(
-            "SENSITIVE MATERIAL:",
+            "Are there topics, people, or events you want to handle carefully or omit entirely?",
             value=gps.get('sensitive_material', ''),
+            label_visibility="collapsed",
             placeholder="Are there topics, people, or events you want to handle carefully or omit entirely?",
             key="gps_sensitive"
         )
@@ -746,6 +767,8 @@ def render_narrative_gps():
         gps['sensitive_people'] = st.text_area(
             "Any living people whose portrayal requires sensitivity or legal consideration?",
             value=gps.get('sensitive_people', ''),
+            label_visibility="collapsed",
+            placeholder="Any living people whose portrayal requires sensitivity or legal consideration?",
             key="gps_sensitive_people"
         )
         
@@ -758,7 +781,7 @@ def render_narrative_gps():
         inclusion_options = ["Photos", "Family trees", "Recipes", "Letters/documents", "Timelines", "Resources for readers"]
         for inc in inclusion_options:
             if st.checkbox(
-                f"□ {inc}",
+                inc,
                 value=inc in gps.get('inclusions', []),
                 key=f"gps_inc_{inc}"
             ):
@@ -769,9 +792,11 @@ def render_narrative_gps():
                     gps['inclusions'].remove(inc)
         
         st.markdown("---")
+        st.markdown("**LOCATIONS:**")
         gps['locations'] = st.text_area(
-            "LOCATIONS:",
+            "List key places that must appear in the story (hometowns, meaningful travels, etc.)",
             value=gps.get('locations', ''),
+            label_visibility="collapsed",
             placeholder="List key places that must appear in the story (hometowns, meaningful travels, etc.)",
             key="gps_locations"
         )
@@ -790,7 +815,7 @@ def render_narrative_gps():
         
         for mat in material_options:
             if st.checkbox(
-                f"□ {mat}",
+                mat,
                 value=mat in gps.get('materials', []),
                 key=f"gps_mat_{mat}"
             ):
@@ -801,9 +826,11 @@ def render_narrative_gps():
                     gps['materials'].remove(mat)
         
         st.markdown("---")
+        st.markdown("**PEOPLE TO INTERVIEW:**")
         gps['people_to_interview'] = st.text_area(
-            "PEOPLE TO INTERVIEW:",
+            "Are there family members, friends, or colleagues who should contribute their memories?",
             value=gps.get('people_to_interview', ''),
+            label_visibility="collapsed",
             placeholder="Are there family members, friends, or colleagues who should contribute their memories?",
             key="gps_people"
         )
@@ -817,7 +844,7 @@ def render_narrative_gps():
         legal_options = ["ISBN registration", "Copyright", "Libel review", "Permissions for quoted material"]
         for leg in legal_options:
             if st.checkbox(
-                f"□ {leg}",
+                leg,
                 value=leg in gps.get('legal', []),
                 key=f"gps_legal_{leg}"
             ):
@@ -857,6 +884,7 @@ def render_narrative_gps():
         
         st.markdown("---")
         
+        st.markdown("**FEEDBACK STYLE:**")
         feedback_options = ["", "Written comments", "Phone/video discussions", "Line-by-line edits"]
         feedback_index = 0
         if gps.get('feedback_style') in feedback_options:
@@ -866,13 +894,16 @@ def render_narrative_gps():
             "FEEDBACK STYLE:",
             options=feedback_options,
             index=feedback_index,
+            label_visibility="collapsed",
             key="gps_feedback"
         )
         
         st.markdown("---")
+        st.markdown("**THE UNSPOKEN:**")
         gps['unspoken'] = st.text_area(
-            "THE UNSPOKEN:",
+            "What are you hoping I'll bring to this project that you can't do yourself?",
             value=gps.get('unspoken', ''),
+            label_visibility="collapsed",
             placeholder="What are you hoping I'll bring to this project that you can't do yourself?",
             key="gps_unspoken"
         )
@@ -1864,42 +1895,42 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ============================================================================
-# PROFILE SETUP MODAL (WITH NARRATIVE GPS)
+# PROFILE SETUP MODAL (WITH NARRATIVE GPS BELOW - NO TABS)
 # ============================================================================
 if st.session_state.get('show_profile_setup', False):
     st.markdown('<div class="profile-setup-modal">', unsafe_allow_html=True)
     st.title("👤 Your Profile & Book Planning")
     
-    # Create tabs for basic profile and Narrative GPS
-    profile_tab, gps_tab = st.tabs(["📝 Basic Profile", "📋 Narrative GPS"])
-    
-    with profile_tab:
-        with st.form("profile_setup_form"):
-            gender = st.radio("Gender", ["Male", "Female", "Other", "Prefer not to say"], horizontal=True, key="modal_gender", label_visibility="collapsed")
-            col1, col2, col3 = st.columns(3)
-            with col1: 
-                birth_month = st.selectbox("Month", ["January","February","March","April","May","June","July","August","September","October","November","December"], key="modal_month")
-            with col2: 
-                birth_day = st.selectbox("Day", list(range(1,32)), key="modal_day")
-            with col3: 
-                birth_year = st.selectbox("Year", list(range(datetime.now().year, datetime.now().year-120, -1)), key="modal_year")
-            account_for = st.radio("Account Type", ["For me", "For someone else"], key="modal_account_type", horizontal=True)
-            
-            if st.form_submit_button("Complete Profile", type="primary", use_container_width=True):
-                if birth_month and birth_day and birth_year:
-                    birthdate = f"{birth_month} {birth_day}, {birth_year}"
-                    if st.session_state.user_account:
-                        st.session_state.user_account['profile'].update({'gender': gender, 'birthdate': birthdate, 'timeline_start': birthdate})
-                        st.session_state.user_account['account_type'] = "self" if account_for == "For me" else "other"
-                        save_account_data(st.session_state.user_account)
-                    st.session_state.show_profile_setup = False
-                    st.rerun()
-            if st.form_submit_button("Skip for Now", use_container_width=True):
+    # Basic Profile Section
+    with st.form("profile_setup_form"):
+        st.markdown("### 📝 Basic Profile")
+        gender = st.radio("Gender", ["Male", "Female", "Other", "Prefer not to say"], horizontal=True, key="modal_gender", label_visibility="collapsed")
+        col1, col2, col3 = st.columns(3)
+        with col1: 
+            birth_month = st.selectbox("Month", ["January","February","March","April","May","June","July","August","September","October","November","December"], key="modal_month")
+        with col2: 
+            birth_day = st.selectbox("Day", list(range(1,32)), key="modal_day")
+        with col3: 
+            birth_year = st.selectbox("Year", list(range(datetime.now().year, datetime.now().year-120, -1)), key="modal_year")
+        account_for = st.radio("Account Type", ["For me", "For someone else"], key="modal_account_type", horizontal=True)
+        
+        if st.form_submit_button("Complete Profile", type="primary", use_container_width=True):
+            if birth_month and birth_day and birth_year:
+                birthdate = f"{birth_month} {birth_day}, {birth_year}"
+                if st.session_state.user_account:
+                    st.session_state.user_account['profile'].update({'gender': gender, 'birthdate': birthdate, 'timeline_start': birthdate})
+                    st.session_state.user_account['account_type'] = "self" if account_for == "For me" else "other"
+                    save_account_data(st.session_state.user_account)
                 st.session_state.show_profile_setup = False
                 st.rerun()
+        if st.form_submit_button("Skip for Now", use_container_width=True):
+            st.session_state.show_profile_setup = False
+            st.rerun()
     
-    with gps_tab:
-        render_narrative_gps()
+    st.divider()
+    
+    # Narrative GPS Section (directly below, not in tabs)
+    render_narrative_gps()
     
     # Close button at the bottom
     if st.button("← Close Profile", key="close_profile", use_container_width=True):
@@ -1908,7 +1939,6 @@ if st.session_state.get('show_profile_setup', False):
     
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
-
 # ============================================================================
 # MODAL HANDLING
 # ============================================================================
