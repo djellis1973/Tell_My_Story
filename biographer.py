@@ -1981,20 +1981,25 @@ if st.session_state.logged_in and st.session_state.image_handler:
                 else:
                     st.markdown("*No caption*")
             
-            with col3:
-                if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
-                    # Get full image HTML
-                    full_html = img.get("full_html", "")
-                    if full_html:
-                        current_content = st.session_state.get(content_key, "")
-                        if current_content and current_content != "<p><br></p>":
-                            new_content = current_content + "<br><br>" + full_html
-                        else:
-                            new_content = full_html
-                        st.session_state[content_key] = new_content
-                        st.rerun()
-        
-        st.markdown("---")
+with col3:
+    if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
+        # Get full image HTML
+        full_html = img.get("full_html", "")
+        if full_html:
+            # Get current content directly from session state
+            current_content = st.session_state.get(content_key, "")
+            
+            # Clear placeholder if needed
+            if current_content in ["<p><br></p>", "<p>Start writing your story here...</p>"]:
+                current_content = ""
+            
+            # Add image with line breaks
+            if current_content:
+                st.session_state[content_key] = current_content + "<br><br>" + full_html
+            else:
+                st.session_state[content_key] = full_html
+            
+            st.rerun()
     
     # Upload new images
     with st.expander("📤 Upload New Photos", expanded=len(existing_images) == 0):
