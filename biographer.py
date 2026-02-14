@@ -282,7 +282,7 @@ def init_image_handler():
     return st.session_state.image_handler
 
 # ============================================================================
-# AUTHENTICATION FUNCTIONS (YOUR ORIGINAL)
+# AUTHENTICATION FUNCTIONS
 # ============================================================================
 def generate_password(length=12):
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
@@ -912,7 +912,7 @@ def show_bank_editor():
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================================
-# PDF GENERATION FUNCTIONS - COMPLETELY REWRITTEN FOR RELIABILITY
+# PDF GENERATION FUNCTIONS
 # ============================================================================
 class PDF(FPDF):
     def header(self):
@@ -1598,7 +1598,7 @@ with st.sidebar:
                         )
                         filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
                         st.download_button(
-                            "📥 Download DOCX", 
+                            label="📥 Download DOCX", 
                             data=docx_bytes, 
                             file_name=filename, 
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
@@ -1612,7 +1612,7 @@ with st.sidebar:
                         html_content = generate_html(book_title, author_name, export_data)
                         filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
                         st.download_button(
-                            "📥 Download HTML", 
+                            label="📥 Download HTML", 
                             data=html_content, 
                             file_name=filename, 
                             mime="text/html", 
@@ -1626,7 +1626,7 @@ with st.sidebar:
                         zip_data = generate_zip(book_title, author_name, export_data)
                         filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.zip"
                         st.download_button(
-                            "📥 Download ZIP", 
+                            label="📥 Download ZIP", 
                             data=zip_data, 
                             file_name=filename, 
                             mime="application/zip", 
@@ -1721,7 +1721,7 @@ with col1:
     answered = len(sdata.get("questions", {}))
     total = len(current_session["questions"])
     if total > 0: 
-        st.progress(min(answered/total, 1.0))
+        st.progress(answered/total)
         st.caption(f"📝 Topics explored: {answered}/{total} ({answered/total*100:.0f}%)")
 with col2:
     if question_source == "custom":
@@ -1754,7 +1754,7 @@ if st.session_state.logged_in:
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
 # ============================================================================
-# QUILL EDITOR - YOUR ORIGINAL WORKING VERSION
+# QUILL EDITOR
 # ============================================================================
 editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
 content_key = f"{editor_key}_content"
@@ -1788,7 +1788,7 @@ user_input = st.session_state[content_key]
 st.markdown("---")
 
 # ============================================================================
-# IMAGE UPLOAD SECTION - YOUR ORIGINAL WITH INSERT BUTTON
+# IMAGE UPLOAD SECTION
 # ============================================================================
 if st.session_state.logged_in and st.session_state.image_handler:
     
@@ -1804,7 +1804,6 @@ if st.session_state.logged_in and st.session_state.image_handler:
                 if img.get("thumb_html"):
                     # Extract base64 from the HTML
                     html_content = img.get("thumb_html", "")
-                    import re
                     match = re.search(r'src="data:image/jpeg;base64,([^"]+)"', html_content)
                     if match:
                         b64 = match.group(1)
@@ -1870,7 +1869,7 @@ if st.session_state.logged_in and st.session_state.image_handler:
     st.markdown("---")
 
 # ============================================================================
-# SAVE BUTTONS
+# SAVE BUTTONS (FIXED NAVIGATION)
 # ============================================================================
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
@@ -1896,16 +1895,18 @@ with col2:
 with col3:
     nav1, nav2 = st.columns(2)
     with nav1: 
-        prev_dis = st.session_state.current_question == 0
-        if st.button("← Previous Topic", disabled=prev_dis, key="prev_btn", use_container_width=True):
-            if not prev_dis: 
-                st.session_state.update(current_question=st.session_state.current_question-1, editing=False, current_question_override=None)
+        prev_disabled = st.session_state.current_question == 0
+        if st.button("← Previous Topic", disabled=prev_disabled, key="prev_btn", use_container_width=True):
+            if not prev_disabled:
+                st.session_state.current_question -= 1
+                st.session_state.current_question_override = None
                 st.rerun()
     with nav2:
-        next_dis = st.session_state.current_question >= len(current_session["questions"]) - 1
-        if st.button("Next Topic →", disabled=next_dis, key="next_btn", use_container_width=True):
-            if not next_dis: 
-                st.session_state.update(current_question=st.session_state.current_question+1, editing=False, current_question_override=None)
+        next_disabled = st.session_state.current_question >= len(current_session["questions"]) - 1
+        if st.button("Next Topic →", disabled=next_disabled, key="next_btn", use_container_width=True):
+            if not next_disabled:
+                st.session_state.current_question += 1
+                st.session_state.current_question_override = None
                 st.rerun()
 
 st.divider()
