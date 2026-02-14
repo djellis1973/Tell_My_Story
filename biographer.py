@@ -1,4 +1,4 @@
-# biographer.py – Tell My Story App (ORIGINAL WORKING + 2 SEC REFRESH FIXED)
+# biographer.py – Tell My Story App (ORIGINAL WORKING + PUBLISH BUTTONS)
 import streamlit as st
 import json
 from datetime import datetime, date
@@ -7,7 +7,7 @@ import os
 import re
 import hashlib
 import smtplib
-from email.mime.text import MIMEText
+from email.mime.text import MIMETextdocx
 from email.mime.multipart import MIMEMultipart
 import secrets
 import string
@@ -20,7 +20,6 @@ from docx import Document
 from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from fpdf import FPDF
-import zipfile
 
 # ============================================================================
 # IMPORT QUILL RICH TEXT EDITOR
@@ -78,9 +77,7 @@ default_state = {
     "current_bank_id": None, "show_bank_manager": False, "show_bank_editor": False,
     "editing_bank_id": None, "editing_bank_name": None, "qb_manager": None, "qb_manager_initialized": False,
     "confirm_delete": None, "user_account": None, "show_profile_setup": False,
-    "image_handler": None, "show_image_manager": False,
-    # ADDED: Track last update time to prevent refresh loops
-    "last_editor_update": 0
+    "image_handler": None, "show_image_manager": False
 }
 for key, value in default_state.items():
     if key not in st.session_state:
@@ -107,23 +104,12 @@ EMAIL_CONFIG = {
 }
 
 # ============================================================================
-# IMAGE HANDLER - COMPLETE WORKING VERSION WITH AUTO-RESIZE
+# IMAGE HANDLER - COMPLETE WORKING VERSION
 # ============================================================================
 class ImageHandler:
     def __init__(self, user_id=None):
         self.user_id = user_id
         self.base_path = "uploads"
-        
-        # Kindle-optimized settings
-        self.settings = {
-            "full_width": 1600,      # Max width for full-page images
-            "inline_width": 800,      # Width for inline images
-            "thumbnail_size": 200,     # Thumbnail size
-            "dpi": 300,                # Target DPI (will be maintained during resize)
-            "quality": 85,              # JPEG quality (85 is good balance)
-            "max_file_size_mb": 5,      # Warn if original > 5MB
-            "aspect_ratio": 1.6         # Kindle ideal ratio (height/width = 1.6)
-        }
     
     def get_user_path(self):
         if self.user_id:
@@ -133,95 +119,31 @@ class ImageHandler:
             return path
         return self.base_path
     
-    def optimize_image(self, image, max_width=1600, is_thumbnail=False):
-        """Optimize image for Kindle with automatic resizing"""
+    def save_image(self, uploaded_file, session_id, question_text, caption=""):
         try:
-            # Convert to RGB if needed
-            if image.mode in ('RGBA', 'LA', 'P'):
-                # Create white background for transparency
-                bg = Image.new('RGB', image.size, (255, 255, 255))
-                if image.mode == 'P':
-                    image = image.convert('RGBA')
-                if image.mode == 'RGBA':
-                    bg.paste(image, mask=image.split()[-1])
-                else:
-                    bg.paste(image)
-                image = bg
-            
-            # Calculate new dimensions while maintaining aspect ratio
-            width, height = image.size
-            aspect = height / width
-            
-            # For thumbnails, use square crop
-            if is_thumbnail:
-                # Crop to square first
-                size = min(width, height)
-                left = (width - size) // 2
-                top = (height - size) // 2
-                right = left + size
-                bottom = top + size
-                image = image.crop((left, top, right, bottom))
-                # Resize to thumbnail size
-                image.thumbnail((self.settings["thumbnail_size"], self.settings["thumbnail_size"]), Image.Resampling.LANCZOS)
-                return image
-            
-            # For regular images, resize based on max_width
-            if width > max_width:
-                new_width = max_width
-                new_height = int(max_width * aspect)
-                image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            return image
-            
-        except Exception as e:
-            print(f"Error optimizing image: {e}")
-            return image
-    
-    def save_image(self, uploaded_file, session_id, question_text, caption="", usage="full_page"):
-        """
-        Save image with automatic optimization
-        usage: "full_page" (1600px) or "inline" (800px)
-        """
-        try:
-            # Read and open image
             image_data = uploaded_file.read()
-            original_size = len(image_data) / (1024 * 1024)  # Size in MB
-            
-            # Warn if image is very large
-            if original_size > self.settings["max_file_size_mb"]:
-                print(f"Warning: Large image ({original_size:.1f}MB). Will be optimized.")
-            
-            img = Image.open(io.BytesIO(image_data))
-            
-            # Determine target width based on usage
-            target_width = self.settings["full_width"] if usage == "full_page" else self.settings["inline_width"]
-            
-            # Generate unique ID
             image_id = hashlib.md5(f"{self.user_id}{session_id}{question_text}{datetime.now()}".encode()).hexdigest()[:16]
             
-            # Create optimized version for main storage
-            optimized_img = self.optimize_image(img, target_width, is_thumbnail=False)
+            img = Image.open(io.BytesIO(image_data))
+            if img.mode == 'RGBA': 
+                img = img.convert('RGB')
             
-            # Create thumbnail
-            thumb_img = self.optimize_image(img, is_thumbnail=True)
-            
-            # Save optimized main image
+            # Save full image
             main_buffer = io.BytesIO()
-            optimized_img.save(main_buffer, format="JPEG", quality=self.settings["quality"], optimize=True)
-            main_size = len(main_buffer.getvalue()) / (1024 * 1024)
+            img.save(main_buffer, format="JPEG", quality=85, optimize=True)
             
             # Save thumbnail
+            img.thumbnail((200, 200))
             thumb_buffer = io.BytesIO()
-            thumb_img.save(thumb_buffer, format="JPEG", quality=70, optimize=True)
+            img.save(thumb_buffer, format="JPEG", quality=70, optimize=True)
             
-            # Write files
             user_path = self.get_user_path()
             with open(f"{user_path}/{image_id}.jpg", 'wb') as f: 
                 f.write(main_buffer.getvalue())
             with open(f"{user_path}/thumbnails/{image_id}.jpg", 'wb') as f: 
                 f.write(thumb_buffer.getvalue())
             
-            # Save metadata with optimization info
+            # Save metadata
             metadata = {
                 "id": image_id, 
                 "session_id": session_id, 
@@ -229,32 +151,12 @@ class ImageHandler:
                 "caption": caption, 
                 "alt_text": caption[:100] if caption else "",
                 "timestamp": datetime.now().isoformat(),
-                "user_id": self.user_id,
-                "usage": usage,
-                "original_size_mb": round(original_size, 2),
-                "optimized_size_mb": round(main_size, 2),
-                "dimensions": f"{optimized_img.width}x{optimized_img.height}",
-                "optimized": True,
-                "format": "JPEG",
-                "dpi": self.settings["dpi"]
+                "user_id": self.user_id
             }
             with open(f"{self.base_path}/metadata/{image_id}.json", 'w') as f: 
-                json.dump(metadata, f, indent=2)
+                json.dump(metadata, f)
             
-            # Show optimization stats if significant reduction
-            reduction = ((original_size - main_size) / original_size) * 100 if original_size > 0 else 0
-            if reduction > 20:  # If we saved more than 20%
-                print(f"✅ Image optimized: {original_size:.1f}MB → {main_size:.1f}MB ({reduction:.0f}% reduction)")
-            
-            return {
-                "has_images": True, 
-                "images": [{
-                    "id": image_id, 
-                    "caption": caption,
-                    "dimensions": f"{optimized_img.width}x{optimized_img.height}",
-                    "size_mb": round(main_size, 2)
-                }]
-            }
+            return {"has_images": True, "images": [{"id": image_id, "caption": caption}]}
         except Exception as e:
             print(f"Error saving image: {e}")
             return None
@@ -272,19 +174,15 @@ class ImageHandler:
             
             meta_path = f"{self.base_path}/metadata/{image_id}.json"
             caption = ""
-            dimensions = ""
             if os.path.exists(meta_path):
                 with open(meta_path, 'r') as f:
                     metadata = json.load(f)
                     caption = metadata.get("caption", "")
-                    dimensions = metadata.get("dimensions", "")
             
-            # Add dimension info as data attribute for debugging
             return {
-                "html": f'<img src="data:image/jpeg;base64,{b64}" style="max-width:100%; border-radius:8px; margin:5px 0;" alt="{caption}" data-dimensions="{dimensions}">',
+                "html": f'<img src="data:image/jpeg;base64,{b64}" style="max-width:100%; border-radius:8px; margin:5px 0;" alt="{caption}">',
                 "caption": caption, 
-                "base64": b64,
-                "dimensions": dimensions
+                "base64": b64
             }
         except:
             return None
@@ -371,22 +269,18 @@ class ImageHandler:
                                    key=f"up_{session_id}_{hash(question_text)}", label_visibility="collapsed")
         if uploaded:
             cap = st.text_input("Caption:", key=f"cap_{session_id}_{hash(question_text)}")
-            usage = st.radio("Image size:", ["Full Page", "Inline"], horizontal=True, key=f"usage_{session_id}_{hash(question_text)}")
             if st.button("📤 Upload", key=f"btn_{session_id}_{hash(question_text)}"):
-                with st.spinner("Uploading and optimizing..."):
-                    usage_type = "full_page" if usage == "Full Page" else "inline"
-                    if self.save_image(uploaded, session_id, question_text, cap, usage_type):
-                        st.success("✅ Uploaded and optimized!")
-                        st.rerun()
+                with st.spinner("Uploading..."):
+                    if self.save_image(uploaded, session_id, question_text, cap):
+                        st.success("Uploaded!"); st.rerun()
         return existing_images or []
 
 def init_image_handler():
     if not st.session_state.image_handler or st.session_state.image_handler.user_id != st.session_state.get('user_id'):
         st.session_state.image_handler = ImageHandler(st.session_state.get('user_id'))
     return st.session_state.image_handler
-
 # ============================================================================
-# AUTHENTICATION FUNCTIONS
+# AUTHENTICATION FUNCTIONS (YOUR ORIGINAL)
 # ============================================================================
 def generate_password(length=12):
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
@@ -822,57 +716,6 @@ def get_previous_beta_feedback(user_id, session_id):
         return None
     return beta_reader.get_previous_feedback(user_id, session_id, get_user_filename, load_user_data)
 
-def display_saved_feedback(user_id, session_id):
-    """Display all saved beta feedback for a session"""
-    user_data = load_user_data(user_id)
-    feedback_data = user_data.get("beta_feedback", {})
-    session_feedback = feedback_data.get(str(session_id), [])
-    
-    if not session_feedback:
-        st.info("No saved feedback for this session yet.")
-        return
-    
-    st.markdown("### 📚 Saved Beta Reader Feedback")
-    
-    # Sort by date, newest first
-    session_feedback.sort(key=lambda x: x.get('generated_at', ''), reverse=True)
-    
-    for i, fb in enumerate(session_feedback):
-        with st.expander(f"Feedback from {datetime.fromisoformat(fb['generated_at']).strftime('%B %d, %Y at %I:%M %p')}"):
-            col1, col2, col3 = st.columns([1, 1, 1])
-            
-            with col1:
-                st.markdown(f"**Type:** {fb.get('feedback_type', 'comprehensive').title()}")
-            with col2:
-                st.markdown(f"**Overall Score:** {fb.get('overall_score', 'N/A')}/10")
-            with col3:
-                if st.button(f"🗑️ Delete", key=f"del_fb_{i}_{fb.get('generated_at')}"):
-                    # Delete this feedback
-                    session_feedback.pop(i)
-                    user_data["beta_feedback"][str(session_id)] = session_feedback
-                    save_user_data(user_id, user_data.get("responses", {}))
-                    st.rerun()
-            
-            # Display the feedback content
-            if 'summary' in fb:
-                st.markdown("**Summary:**")
-                st.markdown(fb['summary'])
-            
-            if 'strengths' in fb:
-                st.markdown("**Strengths:**")
-                for s in fb['strengths']:
-                    st.markdown(f"✅ {s}")
-            
-            if 'areas_for_improvement' in fb:
-                st.markdown("**Areas for Improvement:**")
-                for a in fb['areas_for_improvement']:
-                    st.markdown(f"📝 {a}")
-            
-            if 'suggestions' in fb:
-                st.markdown("**Suggestions:**")
-                for sug in fb['suggestions']:
-                    st.markdown(f"💡 {sug}")
-
 # ============================================================================
 # VIGNETTE FUNCTIONS
 # ============================================================================
@@ -1067,7 +910,7 @@ def show_bank_editor():
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================================
-# PDF GENERATION FUNCTIONS
+# PDF GENERATION FUNCTIONS - COMPLETELY REWRITTEN FOR RELIABILITY
 # ============================================================================
 class PDF(FPDF):
     def header(self):
@@ -1200,214 +1043,6 @@ def generate_docx(book_title, author_name, stories, format_style, include_toc, i
     doc.save(docx_bytes)
     docx_bytes.seek(0)
     return docx_bytes
-
-# ============================================================================
-# HTML GENERATION FUNCTION
-# ============================================================================
-def generate_html(book_title, author_name, stories):
-    """Generate a beautiful HTML file with images"""
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>{book_title}</title>
-    <style>
-        body {{
-            font-family: 'Georgia', 'Times New Roman', serif;
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 20px;
-            line-height: 1.6;
-            color: #333;
-            background: #fff;
-        }}
-        h1 {{
-            color: #667eea;
-            text-align: center;
-            font-size: 2.5em;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
-        }}
-        h2 {{
-            color: #764ba2;
-            margin-top: 40px;
-        }}
-        .author {{
-            text-align: center;
-            font-size: 1.2em;
-            color: #666;
-            margin-bottom: 40px;
-        }}
-        .story {{
-            margin-bottom: 50px;
-            padding: 25px;
-            background: #f9f9f9;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }}
-        .question {{
-            font-size: 1.4em;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 15px;
-            border-left: 4px solid #667eea;
-            padding-left: 15px;
-        }}
-        .answer {{
-            font-size: 1.1em;
-            white-space: pre-wrap;
-            margin-bottom: 20px;
-        }}
-        img {{
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            margin: 15px 0;
-            display: block;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }}
-        .caption {{
-            font-style: italic;
-            color: #666;
-            text-align: center;
-            margin-top: -10px;
-            margin-bottom: 20px;
-            font-size: 0.95em;
-        }}
-        hr {{
-            border: none;
-            border-top: 2px solid #e0e0e0;
-            margin: 40px 0;
-        }}
-        .footer {{
-            text-align: center;
-            color: #999;
-            font-size: 0.9em;
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-        }}
-        .image-gallery {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            justify-content: center;
-            margin: 20px 0;
-        }}
-        .image-item {{
-            flex: 0 1 auto;
-            max-width: 300px;
-        }}
-    </style>
-</head>
-<body>
-    <h1>{book_title}</h1>
-    <div class="author">by {author_name}</div>
-"""
-    
-    for i, story in enumerate(stories):
-        html += f"""
-    <div class="story">
-        <div class="question">{story['question']}</div>
-        <div class="answer">{story['answer_text']}</div>
-"""
-        # Add images if any
-        if story.get('images'):
-            html += '        <div class="image-gallery">\n'
-            for img in story.get('images', []):
-                if img.get('base64'):
-                    html += f'            <div class="image-item">\n'
-                    html += f'                <img src="data:image/jpeg;base64,{img["base64"]}" alt="{img.get("caption", "")}">\n'
-                    if img.get('caption'):
-                        html += f'                <div class="caption">📝 {img["caption"]}</div>\n'
-                    html += f'            </div>\n'
-            html += '        </div>\n'
-        
-        html += f"""
-    </div>
-    <hr>
-"""
-    
-    html += f"""
-    <div class="footer">
-        Generated by Tell My Story • {datetime.now().strftime("%B %d, %Y")}
-    </div>
-</body>
-</html>"""
-    return html
-
-# ============================================================================
-# ZIP GENERATION FUNCTION (HTML + Images)
-# ============================================================================
-def generate_zip(book_title, author_name, stories):
-    """Generate a ZIP file containing HTML and all images as separate files"""
-    zip_buffer = io.BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Generate HTML that links to image files
-        html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>{book_title}</title>
-    <style>
-        body {{
-            font-family: 'Georgia', serif;
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 20px;
-            line-height: 1.6;
-        }}
-        h1 {{ color: #667eea; text-align: center; }}
-        .story {{ margin-bottom: 50px; padding: 20px; background: #f9f9f9; border-radius: 10px; }}
-        .question {{ font-size: 1.3em; font-weight: bold; color: #2c3e50; margin-bottom: 15px; }}
-        img {{ max-width: 100%; border-radius: 8px; margin: 10px 0; }}
-        .caption {{ font-style: italic; color: #666; text-align: center; }}
-    </style>
-</head>
-<body>
-    <h1>{book_title}</h1>
-    <div style="text-align: center;">by {author_name}</div>
-"""
-        
-        image_counter = 0
-        for i, story in enumerate(stories):
-            html += f"""
-    <div class="story">
-        <div class="question">{story['question']}</div>
-        <div>{story['answer_text']}</div>
-"""
-            # Add images as separate files
-            for j, img in enumerate(story.get('images', [])):
-                if img.get('base64'):
-                    # Save image to zip
-                    img_data = base64.b64decode(img['base64'])
-                    img_filename = f"images/image_{i}_{j}.jpg"
-                    zip_file.writestr(img_filename, img_data)
-                    
-                    # Add image reference to HTML
-                    html += f'        <img src="{img_filename}" alt="{img.get("caption", "")}">\n'
-                    if img.get('caption'):
-                        html += f'        <div class="caption">📝 {img["caption"]}</div>\n'
-                    image_counter += 1
-            
-            html += f"""
-    </div>
-    <hr>
-"""
-        
-        html += f"""
-    <div class="footer">
-        Generated by Tell My Story • {datetime.now().strftime("%B %d, %Y")}<br>
-        Contains {image_counter} images
-    </div>
-</body>
-</html>"""
-        
-        # Add HTML file to zip
-        zip_file.writestr(f"{book_title.replace(' ', '_')}.html", html)
-    
-    return zip_buffer.getvalue()
 
 # ============================================================================
 # PAGE CONFIG
@@ -1737,12 +1372,11 @@ with st.sidebar:
             with col2:
                 include_dates = st.checkbox("Include Dates", value=False)
             
-            # Three publish options
-            col1, col2, col3 = st.columns(3)
-            
+            # Publish buttons
+            col1, col2 = st.columns(2)
             with col1:
-                if st.button("📊 DOCX", type="primary", use_container_width=True):
-                    with st.spinner("Creating Word document..."):
+                if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
+                    with st.spinner("Creating Word document with images..."):
                         docx_bytes = generate_docx(
                             book_title,
                             author_name,
@@ -1753,40 +1387,33 @@ with st.sidebar:
                         )
                         filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
                         st.download_button(
-                            label="📥 Download DOCX", 
+                            "📥 Download DOCX", 
                             data=docx_bytes, 
                             file_name=filename, 
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
                             use_container_width=True,
                             key="docx_download"
                         )
-
+            
             with col2:
-                if st.button("🌐 HTML", type="primary", use_container_width=True):
-                    with st.spinner("Creating HTML page..."):
-                        html_content = generate_html(book_title, author_name, export_data)
-                        filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
-                        st.download_button(
-                            label="📥 Download HTML", 
-                            data=html_content, 
-                            file_name=filename, 
-                            mime="text/html", 
-                            use_container_width=True,
-                            key="html_download"
+                if st.button("📕 Generate PDF", type="primary", use_container_width=True):
+                    with st.spinner("Creating PDF with images..."):
+                        pdf_bytes = generate_pdf(
+                            book_title,
+                            author_name,
+                            export_data,
+                            format_style,
+                            include_toc,
+                            include_dates
                         )
-
-            with col3:
-                if st.button("📦 ZIP", type="primary", use_container_width=True):
-                    with st.spinner("Creating ZIP package..."):
-                        zip_data = generate_zip(book_title, author_name, export_data)
-                        filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.zip"
+                        filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
                         st.download_button(
-                            label="📥 Download ZIP", 
-                            data=zip_data, 
+                            "📥 Download PDF", 
+                            data=pdf_bytes, 
                             file_name=filename, 
-                            mime="application/zip", 
+                            mime="application/pdf", 
                             use_container_width=True,
-                            key="zip_download"
+                            key="pdf_download"
                         )
         else: 
             st.warning("No stories yet! Start writing to publish.")
@@ -1876,7 +1503,7 @@ with col1:
     answered = len(sdata.get("questions", {}))
     total = len(current_session["questions"])
     if total > 0: 
-        st.progress(answered/total)
+        st.progress(min(answered/total, 1.0))
         st.caption(f"📝 Topics explored: {answered}/{total} ({answered/total*100:.0f}%)")
 with col2:
     if question_source == "custom":
@@ -1909,21 +1536,10 @@ if st.session_state.logged_in:
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
 # ============================================================================
-# QUILL EDITOR - FIXED (NO REFRESH, INSERT WORKS)
+# QUILL EDITOR - YOUR ORIGINAL WORKING VERSION
 # ============================================================================
-# Use a STABLE editor key
 editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
 content_key = f"{editor_key}_content"
-
-# Track question changes separately
-current_question_id = f"{current_session_id}_{current_question_text}"
-if 'last_question_id' not in st.session_state:
-    st.session_state.last_question_id = current_question_id
-elif st.session_state.last_question_id != current_question_id:
-    st.session_state.last_question_id = current_question_id
-    # Clear content for new question
-    if content_key in st.session_state:
-        del st.session_state[content_key]
 
 # Initialize session state for this editor's content
 if content_key not in st.session_state:
@@ -1939,26 +1555,22 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Store the last known value separately (THIS GOES HERE)
-if f"{content_key}_last_value" not in st.session_state:
-    st.session_state[f"{content_key}_last_value"] = st.session_state[content_key]
-
-# ONE Quill editor with STABLE key (THIS GOES HERE)
+# ONE Quill editor
 content = st_quill(
     st.session_state[content_key],
-    key=editor_key
+    editor_key
 )
 
-# ONLY update if content changed AND it's different from last known value (THIS GOES HERE)
-if content is not None and content != st.session_state[f"{content_key}_last_value"]:
+# Update session state when editor changes
+if content is not None:
     st.session_state[content_key] = content
-    st.session_state[f"{content_key}_last_value"] = content
 
 user_input = st.session_state[content_key]
 
 st.markdown("---")
+
 # ============================================================================
-# IMAGE UPLOAD SECTION
+# IMAGE UPLOAD SECTION - YOUR ORIGINAL WITH INSERT BUTTON
 # ============================================================================
 if st.session_state.logged_in and st.session_state.image_handler:
     
@@ -1974,6 +1586,7 @@ if st.session_state.logged_in and st.session_state.image_handler:
                 if img.get("thumb_html"):
                     # Extract base64 from the HTML
                     html_content = img.get("thumb_html", "")
+                    import re
                     match = re.search(r'src="data:image/jpeg;base64,([^"]+)"', html_content)
                     if match:
                         b64 = match.group(1)
@@ -1986,25 +1599,20 @@ if st.session_state.logged_in and st.session_state.image_handler:
                 else:
                     st.markdown("*No caption*")
             
-with col3:
-    if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
-        # Get full image HTML
-        full_html = img.get("full_html", "")
-        if full_html:
-            # Get current content directly from session state
-            current_content = st.session_state.get(content_key, "")
-            
-            # Clear placeholder if needed
-            if current_content in ["<p><br></p>", "<p>Start writing your story here...</p>"]:
-                current_content = ""
-            
-            # Add image with line breaks
-            if current_content:
-                st.session_state[content_key] = current_content + "<br><br>" + full_html
-            else:
-                st.session_state[content_key] = full_html
-            
-            st.rerun()
+            with col3:
+                if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
+                    # Get full image HTML
+                    full_html = img.get("full_html", "")
+                    if full_html:
+                        current_content = st.session_state.get(content_key, "")
+                        if current_content and current_content != "<p><br></p>":
+                            new_content = current_content + "<br><br>" + full_html
+                        else:
+                            new_content = full_html
+                        st.session_state[content_key] = new_content
+                        st.rerun()
+        
+        st.markdown("---")
     
     # Upload new images
     with st.expander("📤 Upload New Photos", expanded=len(existing_images) == 0):
@@ -2025,26 +1633,17 @@ with col3:
                     placeholder="What does this photo show? When was it taken?",
                     key=f"cap_{current_session_id}_{hash(current_question_text)}"
                 )
-                usage = st.radio(
-                    "Image size:",
-                    ["Full Page", "Inline"],
-                    horizontal=True,
-                    key=f"usage_{current_session_id}_{hash(current_question_text)}",
-                    help="Full Page: 1600px wide, Inline: 800px wide"
-                )
             with col2:
                 if st.button("📤 Upload", key=f"btn_{current_session_id}_{hash(current_question_text)}", type="primary", use_container_width=True):
-                    with st.spinner("Uploading and optimizing..."):
-                        usage_type = "full_page" if usage == "Full Page" else "inline"
+                    with st.spinner("Uploading..."):
                         result = st.session_state.image_handler.save_image(
                             uploaded_file, 
                             current_session_id, 
                             current_question_text, 
-                            caption,
-                            usage_type
+                            caption
                         )
                         if result:
-                            st.success("✅ Photo uploaded and optimized!")
+                            st.success("✅ Photo uploaded!")
                             time.sleep(1.5)
                             st.rerun()
                         else:
@@ -2053,7 +1652,7 @@ with col3:
     st.markdown("---")
 
 # ============================================================================
-# SAVE BUTTONS (FIXED NAVIGATION)
+# SAVE BUTTONS
 # ============================================================================
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
@@ -2079,18 +1678,16 @@ with col2:
 with col3:
     nav1, nav2 = st.columns(2)
     with nav1: 
-        prev_disabled = st.session_state.current_question == 0
-        if st.button("← Previous Topic", disabled=prev_disabled, key="prev_btn", use_container_width=True):
-            if not prev_disabled:
-                st.session_state.current_question -= 1
-                st.session_state.current_question_override = None
+        prev_dis = st.session_state.current_question == 0
+        if st.button("← Previous Topic", disabled=prev_dis, key="prev_btn", use_container_width=True):
+            if not prev_dis: 
+                st.session_state.update(current_question=st.session_state.current_question-1, editing=False, current_question_override=None)
                 st.rerun()
     with nav2:
-        next_disabled = st.session_state.current_question >= len(current_session["questions"]) - 1
-        if st.button("Next Topic →", disabled=next_disabled, key="next_btn", use_container_width=True):
-            if not next_disabled:
-                st.session_state.current_question += 1
-                st.session_state.current_question_override = None
+        next_dis = st.session_state.current_question >= len(current_session["questions"]) - 1
+        if st.button("Next Topic →", disabled=next_dis, key="next_btn", use_container_width=True):
+            if not next_dis: 
+                st.session_state.update(current_question=st.session_state.current_question+1, editing=False, current_question_override=None)
                 st.rerun()
 
 st.divider()
@@ -2105,137 +1702,48 @@ if user_input and user_input != "<p><br></p>" and user_input != "<p>Start writin
         st.markdown("---")
 
 # ============================================================================
-# BETA READER FEEDBACK SECTION
+# BETA READER SECTION
 # ============================================================================
 st.subheader("🦋 Beta Reader Feedback")
+sdata = st.session_state.responses.get(current_session_id, {})
+answered_cnt = len(sdata.get("questions", {}))
+total_q = len(current_session["questions"])
 
-# Create tabs for Current Session and Feedback History
-tab1, tab2 = st.tabs(["📝 Current Session", "📚 Feedback History"])
-
-with tab1:
-    sdata = st.session_state.responses.get(current_session_id, {})
-    answered_cnt = len(sdata.get("questions", {}))
-    total_q = len(current_session["questions"])
-
-    if answered_cnt == total_q and total_q > 0:
-        st.success("✅ Session complete - ready for beta reading!")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1: 
-            fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type")
-        with col2:
-            if st.button("🦋 Get Beta Reader Feedback", use_container_width=True, type="primary"):
-                with st.spinner("Analyzing your stories..."):
-                    if beta_reader:
-                        # Get all answers for this session, strip HTML
-                        session_text = ""
-                        for q, a in sdata.get("questions", {}).items():
-                            text_only = re.sub(r'<[^>]+>', '', a.get("answer", ""))
-                            session_text += f"Question: {q}\nAnswer: {text_only}\n\n"
-                        
-                        if session_text.strip():
-                            fb = generate_beta_reader_feedback(current_session["title"], session_text, fb_type)
-                            if "error" not in fb: 
-                                st.session_state.current_beta_feedback = fb
-                                st.session_state.show_beta_reader = True
-                                st.rerun()
-                            else: 
-                                st.error(f"Failed: {fb['error']}")
+if answered_cnt == total_q and total_q > 0:
+    st.success("✅ Session complete - ready for beta reading!")
+    prev_fb = get_previous_beta_feedback(st.session_state.user_id, current_session_id)
+    if prev_fb: 
+        st.info(f"📖 Previous feedback from {datetime.fromisoformat(prev_fb['generated_at']).strftime('%B %d')}")
+    
+    col1, col2 = st.columns([2, 1])
+    with col1: 
+        fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type")
+    with col2:
+        if st.button("🦋 Get Beta Reader Feedback", use_container_width=True, type="primary"):
+            with st.spinner("Analyzing..."):
+                if beta_reader:
+                    # Get all answers for this session, strip HTML
+                    session_text = ""
+                    for q, a in sdata.get("questions", {}).items():
+                        text_only = re.sub(r'<[^>]+>', '', a.get("answer", ""))
+                        session_text += f"Question: {q}\nAnswer: {text_only}\n\n"
+                    
+                    if session_text.strip():
+                        fb = generate_beta_reader_feedback(current_session["title"], session_text, fb_type)
+                        if "error" not in fb: 
+                            st.session_state.current_beta_feedback = fb
+                            st.session_state.show_beta_reader = True
+                            st.rerun()
                         else: 
-                            st.error("No content to analyze")
-    else: 
-        st.info(f"Complete all {total_q} topics in this session to get beta reader feedback.")
-
-with tab2:
-    st.markdown("### 📚 Your Saved Feedback (Forever)")
-    
-    # Load all feedback
-    user_data = load_user_data(st.session_state.user_id) if st.session_state.user_id else {}
-    all_feedback = user_data.get("beta_feedback", {})
-    
-    if not all_feedback:
-        st.info("No saved feedback yet. Generate feedback from any completed session and it will appear here forever.")
-    else:
-        # Create a reverse chronological list of all feedback
-        all_entries = []
-        for session_id_str, feedback_list in all_feedback.items():
-            # Find session title
-            session_title = "Unknown Session"
-            for s in SESSIONS:
-                if str(s["id"]) == session_id_str:
-                    session_title = s["title"]
-                    break
-            
-            for fb in feedback_list:
-                all_entries.append({
-                    "session_id": session_id_str,
-                    "session_title": session_title,
-                    "date": fb.get('generated_at', datetime.now().isoformat()),
-                    "feedback": fb
-                })
-        
-        # Sort by date, newest first
-        all_entries.sort(key=lambda x: x['date'], reverse=True)
-        
-        # Display each feedback entry
-        for i, entry in enumerate(all_entries):
-            fb = entry['feedback']
-            fb_date = datetime.fromisoformat(entry['date']).strftime('%B %d, %Y at %I:%M %p')
-            
-            with st.expander(f"📖 {entry['session_title']} - {fb_date} ({fb.get('feedback_type', 'comprehensive').title()})"):
-                col1, col2, col3 = st.columns([2, 2, 1])
-                
-                with col1:
-                    st.markdown(f"**Session:** {entry['session_title']}")
-                with col2:
-                    st.markdown(f"**Type:** {fb.get('feedback_type', 'comprehensive').title()}")
-                with col3:
-                    if st.button(f"🗑️ Delete", key=f"del_fb_{i}_{entry['date']}"):
-                        # Delete this specific feedback
-                        session_id_str = entry['session_id']
-                        feedback_list = all_feedback.get(session_id_str, [])
-                        
-                        # Remove the matching feedback
-                        feedback_list = [f for f in feedback_list if f.get('generated_at') != entry['date']]
-                        
-                        if feedback_list:
-                            all_feedback[session_id_str] = feedback_list
-                        else:
-                            del all_feedback[session_id_str]
-                        
-                        # Save updated data
-                        user_data["beta_feedback"] = all_feedback
-                        save_user_data(st.session_state.user_id, user_data.get("responses", {}))
-                        st.success("Feedback deleted!")
-                        st.rerun()
-                
-                # Overall score if available
-                if fb.get('overall_score'):
-                    st.markdown(f"**Overall Score:** {fb['overall_score']}/10")
-                
-                # Display the feedback content
-                if 'summary' in fb and fb['summary']:
-                    st.markdown("**Summary:**")
-                    st.markdown(fb['summary'])
-                
-                if 'strengths' in fb and fb['strengths']:
-                    st.markdown("**Strengths:**")
-                    for s in fb['strengths']:
-                        st.markdown(f"✅ {s}")
-                
-                if 'areas_for_improvement' in fb and fb['areas_for_improvement']:
-                    st.markdown("**Areas for Improvement:**")
-                    for a in fb['areas_for_improvement']:
-                        st.markdown(f"📝 {a}")
-                
-                if 'suggestions' in fb and fb['suggestions']:
-                    st.markdown("**Suggestions:**")
-                    for sug in fb['suggestions']:
-                        st.markdown(f"💡 {sug}")
-                
-                # Raw feedback if nothing else
-                if not any([fb.get('summary'), fb.get('strengths'), fb.get('areas_for_improvement'), fb.get('suggestions')]):
-                    st.json(fb)
+                            st.error(f"Failed: {fb['error']}")
+                    else: 
+                        st.error("No content to analyze")
+    if prev_fb and st.button("📖 View Previous Feedback", use_container_width=True):
+        st.session_state.current_beta_feedback = prev_fb
+        st.session_state.show_beta_reader = True
+        st.rerun()
+else: 
+    st.info(f"Complete all {total_q} topics in this session to get beta reader feedback.")
 
 st.divider()
 
@@ -2295,3 +1803,297 @@ if st.session_state.user_account:
     st.caption(f"Tell My Story Timeline • 👤 {profile['first_name']} {profile['last_name']} • 📅 Account Age: {age} days • 📚 Bank: {st.session_state.get('current_bank_name', 'None')}")
 else: 
     st.caption(f"Tell My Story Timeline • User: {st.session_state.user_id}")
+
+
+whitht he following NO OTHER CHANGES
+
+Here's the complete section to replace your publish buttons. Add both HTML and ZIP functions:
+
+First, add these functions right after your DOCX function (around line 900):
+
+python
+# ============================================================================
+# HTML GENERATION FUNCTION
+# ============================================================================
+def generate_html(book_title, author_name, stories):
+    """Generate a beautiful HTML file with images"""
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{book_title}</title>
+    <style>
+        body {{
+            font-family: 'Georgia', 'Times New Roman', serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+        }}
+        h1 {{
+            color: #667eea;
+            text-align: center;
+            font-size: 2.5em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }}
+        h2 {{
+            color: #764ba2;
+            margin-top: 40px;
+        }}
+        .author {{
+            text-align: center;
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 40px;
+        }}
+        .story {{
+            margin-bottom: 50px;
+            padding: 25px;
+            background: #f9f9f9;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }}
+        .question {{
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+            padding-left: 15px;
+        }}
+        .answer {{
+            font-size: 1.1em;
+            white-space: pre-wrap;
+            margin-bottom: 20px;
+        }}
+        img {{
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: block;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }}
+        .caption {{
+            font-style: italic;
+            color: #666;
+            text-align: center;
+            margin-top: -10px;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }}
+        hr {{
+            border: none;
+            border-top: 2px solid #e0e0e0;
+            margin: 40px 0;
+        }}
+        .footer {{
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }}
+        .image-gallery {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            margin: 20px 0;
+        }}
+        .image-item {{
+            flex: 0 1 auto;
+            max-width: 300px;
+        }}
+    </style>
+</head>
+<body>
+    <h1>{book_title}</h1>
+    <div class="author">by {author_name}</div>
+"""
+    
+    for i, story in enumerate(stories):
+        html += f"""
+    <div class="story">
+        <div class="question">{story['question']}</div>
+        <div class="answer">{story['answer_text']}</div>
+"""
+        # Add images if any
+        if story.get('images'):
+            html += '        <div class="image-gallery">\n'
+            for img in story.get('images', []):
+                if img.get('base64'):
+                    html += f'            <div class="image-item">\n'
+                    html += f'                <img src="data:image/jpeg;base64,{img["base64"]}" alt="{img.get("caption", "")}">\n'
+                    if img.get('caption'):
+                        html += f'                <div class="caption">📝 {img["caption"]}</div>\n'
+                    html += f'            </div>\n'
+            html += '        </div>\n'
+        
+        html += f"""
+    </div>
+    <hr>
+"""
+    
+    html += f"""
+    <div class="footer">
+        Generated by Tell My Story • {datetime.now().strftime("%B %d, %Y")}
+    </div>
+</body>
+</html>"""
+    return html
+
+# ============================================================================
+# ZIP GENERATION FUNCTION (HTML + Images)
+# ============================================================================
+import zipfile
+
+def generate_zip(book_title, author_name, stories):
+    """Generate a ZIP file containing HTML and all images as separate files"""
+    zip_buffer = io.BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Generate HTML that links to image files
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{book_title}</title>
+    <style>
+        body {{
+            font-family: 'Georgia', serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        h1 {{ color: #667eea; text-align: center; }}
+        .story {{ margin-bottom: 50px; padding: 20px; background: #f9f9f9; border-radius: 10px; }}
+        .question {{ font-size: 1.3em; font-weight: bold; color: #2c3e50; margin-bottom: 15px; }}
+        img {{ max-width: 100%; border-radius: 8px; margin: 10px 0; }}
+        .caption {{ font-style: italic; color: #666; text-align: center; }}
+    </style>
+</head>
+<body>
+    <h1>{book_title}</h1>
+    <div style="text-align: center;">by {author_name}</div>
+"""
+        
+        image_counter = 0
+        for i, story in enumerate(stories):
+            html += f"""
+    <div class="story">
+        <div class="question">{story['question']}</div>
+        <div>{story['answer_text']}</div>
+"""
+            # Add images as separate files
+            for j, img in enumerate(story.get('images', [])):
+                if img.get('base64'):
+                    # Save image to zip
+                    img_data = base64.b64decode(img['base64'])
+                    img_filename = f"images/image_{i}_{j}.jpg"
+                    zip_file.writestr(img_filename, img_data)
+                    
+                    # Add image reference to HTML
+                    html += f'        <img src="{img_filename}" alt="{img.get("caption", "")}">\n'
+                    if img.get('caption'):
+                        html += f'        <div class="caption">📝 {img["caption"]}</div>\n'
+                    image_counter += 1
+            
+            html += f"""
+    </div>
+    <hr>
+"""
+        
+        html += f"""
+    <div class="footer">
+        Generated by Tell My Story • {datetime.now().strftime("%B %d, %Y")}<br>
+        Contains {image_counter} images
+    </div>
+</body>
+</html>"""
+        
+        # Add HTML file to zip
+        zip_file.writestr(f"{book_title.replace(' ', '_')}.html", html)
+    
+    return zip_buffer.getvalue()
+Then replace your publish buttons section in the sidebar (around line 1400) with this:
+
+python
+# ===== PUBLISH BUTTONS =====
+st.markdown("### 🖨️ Publish Your Book")
+
+# Book settings
+col1, col2 = st.columns(2)
+with col1:
+    first_name = st.session_state.user_account.get('profile', {}).get('first_name', 'My')
+    book_title = st.text_input("Book Title", value=f"{first_name}'s Story")
+with col2:
+    author_name = st.text_input("Author Name", value=f"{st.session_state.user_account.get('profile', {}).get('first_name', '')} {st.session_state.user_account.get('profile', {}).get('last_name', '')}".strip())
+
+format_style = st.selectbox("Format Style", ["interview", "biography", "memoir"], 
+                           format_func=lambda x: {"interview": "📝 Interview Q&A", 
+                                                 "biography": "📖 Continuous Biography", 
+                                                 "memoir": "📚 Chapter-based Memoir"}[x])
+
+col1, col2 = st.columns(2)
+with col1:
+    include_toc = st.checkbox("Table of Contents", value=True)
+with col2:
+    include_dates = st.checkbox("Include Dates", value=False)
+
+# Three publish options
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if st.button("📊 DOCX", type="primary", use_container_width=True):
+        with st.spinner("Creating Word document..."):
+            docx_bytes = generate_docx(
+                book_title,
+                author_name,
+                export_data,
+                format_style,
+                include_toc,
+                include_dates
+            )
+            filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
+            st.download_button(
+                "📥 Download DOCX", 
+                data=docx_bytes, 
+                file_name=filename, 
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                use_container_width=True,
+                key="docx_download"
+            )
+
+with col2:
+    if st.button("🌐 HTML", type="primary", use_container_width=True):
+        with st.spinner("Creating HTML page..."):
+            html_content = generate_html(book_title, author_name, export_data)
+            filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
+            st.download_button(
+                "📥 Download HTML", 
+                data=html_content, 
+                file_name=filename, 
+                mime="text/html", 
+                use_container_width=True,
+                key="html_download"
+            )
+
+with col3:
+    if st.button("📦 ZIP", type="primary", use_container_width=True):
+        with st.spinner("Creating ZIP package..."):
+            zip_data = generate_zip(book_title, author_name, export_data)
+            filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.zip"
+            st.download_button(
+                "📥 Download ZIP", 
+                data=zip_data, 
+                file_name=filename, 
+                mime="application/zip", 
+                use_container_width=True,
+                key="zip_download"
+            )
