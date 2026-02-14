@@ -1911,7 +1911,17 @@ if st.session_state.logged_in:
 # ============================================================================
 # QUILL EDITOR - FIXED 2 SECOND REFRESH ISSUE
 # ============================================================================
-editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
+# ADD THIS: Create a version key that changes only when the question changes
+if 'editor_version' not in st.session_state:
+    st.session_state.editor_version = 0
+
+# Update version when question changes
+current_question_id = f"{current_session_id}_{current_question_text}"
+if st.session_state.get('last_question_id') != current_question_id:
+    st.session_state.last_question_id = current_question_id
+    st.session_state.editor_version += 1
+
+editor_key = f"quill_{current_session_id}_{current_question_text[:20]}_{st.session_state.editor_version}"
 content_key = f"{editor_key}_content"
 
 # Initialize session state for this editor's content
@@ -1928,25 +1938,15 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ADDED: Check if enough time has passed since last update to prevent refresh loops
-current_time = time.time()
-if current_time - st.session_state.last_editor_update > 1.0:  # Only update if more than 1 second passed
-    # ONE Quill editor
-    content = st_quill(
-        st.session_state[content_key],
-        editor_key
-    )
-    
-    # Update session state when editor changes, but not too frequently
-    if content is not None and content != st.session_state[content_key]:
-        st.session_state[content_key] = content
-        st.session_state.last_editor_update = current_time
-else:
-    # Just display the editor without processing updates
-    content = st_quill(
-        st.session_state[content_key],
-        editor_key
-    )
+# ONE Quill editor - NO time check
+content = st_quill(
+    st.session_state[content_key],
+    key=editor_key
+)
+
+# Update session state when editor changes
+if content is not None and content != st.session_state[content_key]:
+    st.session_state[content_key] = content
 
 user_input = st.session_state[content_key]
 
