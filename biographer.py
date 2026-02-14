@@ -1,4 +1,4 @@
-# biographer.py – Tell My Story App (ORIGINAL WORKING + PUBLISH BUTTONS)
+# biographer.py – Tell My Story App (COMPLETE FIXED VERSION)
 import streamlit as st
 import json
 from datetime import datetime, date
@@ -57,6 +57,85 @@ except ImportError as e:
 DEFAULT_WORD_TARGET = 500
 
 # ============================================================================
+# FIXED QUILL EDITOR CSS
+# ============================================================================
+st.markdown("""
+<style>
+    /* Quill editor fixes - PREVENT DISAPPEARING */
+    .ql-container {
+        min-height: 300px !important;
+        max-height: 600px !important;
+        font-size: 16px !important;
+        font-family: 'Georgia', serif !important;
+        border-bottom-left-radius: 8px !important;
+        border-bottom-right-radius: 8px !important;
+        background-color: white !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    .ql-editor {
+        min-height: 300px !important;
+        max-height: 600px !important;
+        overflow-y: auto !important;
+        background-color: white !important;
+        padding: 20px !important;
+        display: block !important;
+    }
+    
+    .ql-toolbar {
+        border-top-left-radius: 8px !important;
+        border-top-right-radius: 8px !important;
+        background-color: #f8f9fa !important;
+        border: 1px solid #e0e0e0 !important;
+        border-bottom: none !important;
+        display: block !important;
+    }
+    
+    /* Ensure the editor stays visible */
+    .stQuill {
+        margin-bottom: 20px !important;
+        border: none !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        min-height: 350px !important;
+    }
+    
+    .stQuill > div {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    /* Fix for Streamlit's iframe issues */
+    iframe[title="streamlit_quill.st_quill"] {
+        min-height: 400px !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    /* Image styles */
+    .uploaded-image {
+        max-width: 100%;
+        border-radius: 8px;
+        margin: 10px 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .image-caption {
+        font-style: italic;
+        color: #666;
+        text-align: center;
+        margin-top: 5px;
+        font-size: 0.9em;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ============================================================================
 # INITIALIZATION
 # ============================================================================
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY")))
@@ -78,7 +157,9 @@ default_state = {
     "current_bank_id": None, "show_bank_manager": False, "show_bank_editor": False,
     "editing_bank_id": None, "editing_bank_name": None, "qb_manager": None, "qb_manager_initialized": False,
     "confirm_delete": None, "user_account": None, "show_profile_setup": False,
-    "image_handler": None, "show_image_manager": False
+    "image_handler": None, "show_image_manager": False,
+    # Added for Quill fix
+    "editor_instance": 0
 }
 for key, value in default_state.items():
     if key not in st.session_state:
@@ -803,7 +884,7 @@ def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
             }
 
 # ============================================================================
-# BETA READER FUNCTIONS
+# BETA READER FUNCTIONS - MODIFIED TO WORK WITH SINGLE TOPIC
 # ============================================================================
 def generate_beta_reader_feedback(session_title, session_text, feedback_type="comprehensive"):
     if not beta_reader: 
@@ -819,6 +900,34 @@ def get_previous_beta_feedback(user_id, session_id):
     if not beta_reader: 
         return None
     return beta_reader.get_previous_feedback(user_id, session_id, get_user_filename, load_user_data)
+
+def get_beta_feedback_for_current_question():
+    """Get beta feedback for just the current question/topic"""
+    if not st.session_state.logged_in or not st.session_state.user_id:
+        return None
+    
+    current_session_id = SESSIONS[st.session_state.current_session]["id"]
+    current_question = st.session_state.current_question_override or current_session["questions"][st.session_state.current_question]
+    
+    # Get the answer for this specific question
+    sdata = st.session_state.responses.get(current_session_id, {})
+    answer_data = sdata.get("questions", {}).get(current_question, {})
+    
+    if not answer_data or not answer_data.get("answer"):
+        return None
+    
+    # Strip HTML for analysis
+    text_only = re.sub(r'<[^>]+>', '', answer_data["answer"])
+    
+    if not text_only.strip():
+        return None
+    
+    return {
+        "question": current_question,
+        "answer": text_only,
+        "session_title": current_session["title"],
+        "session_id": current_session_id
+    }
 
 def display_saved_feedback(user_id, session_id):
     """Display all saved beta feedback for a session"""
@@ -1907,18 +2016,8 @@ if st.session_state.logged_in:
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
 # ============================================================================
-# QUILL EDITOR
+# QUILL EDITOR - COMPLETELY FIXED VERSION
 # ============================================================================
-editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
-content_key = f"{editor_key}_content"
-
-# Initialize session state for this editor's content
-if content_key not in st.session_state:
-    if existing_answer and existing_answer != "<p>Start writing your story here...</p>":
-        st.session_state[content_key] = existing_answer
-    else:
-        st.session_state[content_key] = ""
-
 st.markdown("### ✍️ Your Story")
 st.markdown("""
 <div style="background-color: #f0f8ff; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #36cfc9;">
@@ -1926,17 +2025,28 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ONE Quill editor
-content = st_quill(
-    st.session_state[content_key],
-    editor_key
+# Create a stable key that won't change on reruns
+editor_key = f"quill_editor_{current_session_id}_{current_question_text[:30]}_{st.session_state.editor_instance}"
+
+# Initialize the editor content in session state
+content_key = f"quill_content_{current_session_id}_{current_question_text}"
+if content_key not in st.session_state:
+    if existing_answer and existing_answer not in ["<p><br></p>", "<p>Start writing your story here...</p>"]:
+        st.session_state[content_key] = existing_answer
+    else:
+        st.session_state[content_key] = "<p>Start writing your story here...</p>"
+
+# Display the Quill editor with a stable key
+user_input = st_quill(
+    value=st.session_state[content_key],
+    key=editor_key,
+    placeholder="Start writing your story here...",
+    html=True
 )
 
-# Update session state when editor changes
-if content is not None:
-    st.session_state[content_key] = content
-
-user_input = st.session_state[content_key]
+# Update session state when content changes
+if user_input is not None and user_input != st.session_state[content_key]:
+    st.session_state[content_key] = user_input
 
 st.markdown("---")
 
@@ -1953,11 +2063,8 @@ if st.session_state.logged_in and st.session_state.image_handler:
             col1, col2, col3 = st.columns([2, 3, 1])
             
             with col1:
-                # Use st.image instead of raw HTML for reliable display
                 if img.get("thumb_html"):
-                    # Extract base64 from the HTML
-                    html_content = img.get("thumb_html", "")
-                    match = re.search(r'src="data:image/jpeg;base64,([^"]+)"', html_content)
+                    match = re.search(r'src="data:image/jpeg;base64,([^"]+)"', img.get("thumb_html", ""))
                     if match:
                         b64 = match.group(1)
                         st.image(f"data:image/jpeg;base64,{b64}", use_container_width=True)
@@ -1971,14 +2078,14 @@ if st.session_state.logged_in and st.session_state.image_handler:
             
             with col3:
                 if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
-                    # Get full image HTML
                     full_html = img.get("full_html", "")
                     if full_html:
-                        current_content = st.session_state.get(content_key, "")
-                        if current_content and current_content != "<p><br></p>":
-                            new_content = current_content + "<br><br>" + full_html
-                        else:
+                        current_content = st.session_state.get(content_key, "<p></p>")
+                        # Remove any empty paragraphs
+                        if current_content in ["<p><br></p>", "<p></p>", "<p>Start writing your story here...</p>"]:
                             new_content = full_html
+                        else:
+                            new_content = current_content + "<br><br>" + full_html
                         st.session_state[content_key] = new_content
                         st.rerun()
         
@@ -2036,9 +2143,10 @@ if st.session_state.logged_in and st.session_state.image_handler:
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     if st.button("💾 Save Story", key="save_ans", type="primary", use_container_width=True):
-        if user_input and user_input.strip() and user_input != "<p><br></p>" and user_input != "<p>Start writing your story here...</p>":
+        user_content = st.session_state.get(content_key, "")
+        if user_content and user_content not in ["<p><br></p>", "<p></p>", "<p>Start writing your story here...</p>"]:
             with st.spinner("Saving your story..."):
-                if save_response(current_session_id, current_question_text, user_input):
+                if save_response(current_session_id, current_question_text, user_content):
                     st.success("✅ Story saved!")
                     time.sleep(0.5)
                     st.rerun()
@@ -2047,9 +2155,11 @@ with col1:
         else: 
             st.warning("Please write something!")
 with col2:
-    if existing_answer and existing_answer != "<p>Start writing your story here...</p>":
+    has_content = existing_answer and existing_answer not in ["<p><br></p>", "<p></p>", "<p>Start writing your story here...</p>"]
+    if has_content:
         if st.button("🗑️ Delete Story", key="del_ans", use_container_width=True):
             if delete_response(current_session_id, current_question_text):
+                st.session_state[content_key] = "<p>Start writing your story here...</p>"
                 st.success("✅ Story deleted!")
                 st.rerun()
     else: 
@@ -2062,6 +2172,7 @@ with col3:
             if not prev_disabled:
                 st.session_state.current_question -= 1
                 st.session_state.current_question_override = None
+                st.session_state.editor_instance += 1  # Force editor refresh
                 st.rerun()
     with nav2:
         next_disabled = st.session_state.current_question >= len(current_session["questions"]) - 1
@@ -2069,6 +2180,7 @@ with col3:
             if not next_disabled:
                 st.session_state.current_question += 1
                 st.session_state.current_question_override = None
+                st.session_state.editor_instance += 1  # Force editor refresh
                 st.rerun()
 
 st.divider()
@@ -2076,43 +2188,43 @@ st.divider()
 # ============================================================================
 # PREVIEW SECTION
 # ============================================================================
-if user_input and user_input != "<p><br></p>" and user_input != "<p>Start writing your story here...</p>":
+user_content = st.session_state.get(content_key, "")
+if user_content and user_content not in ["<p><br></p>", "<p></p>", "<p>Start writing your story here...</p>"]:
     with st.expander("👁️ Preview your story", expanded=False):
         st.markdown("### 📖 Preview")
-        st.markdown(user_input, unsafe_allow_html=True)
+        st.markdown(user_content, unsafe_allow_html=True)
         st.markdown("---")
 
 # ============================================================================
-# BETA READER FEEDBACK SECTION
+# BETA READER FEEDBACK SECTION - MODIFIED TO WORK WITH SINGLE TOPIC
 # ============================================================================
 st.subheader("🦋 Beta Reader Feedback")
 
-# Create tabs for Current Session and Feedback History
-tab1, tab2 = st.tabs(["📝 Current Session", "📚 Feedback History"])
+# Create tabs for Current Topic and Feedback History
+tab1, tab2 = st.tabs(["📝 Current Topic", "📚 Feedback History"])
 
 with tab1:
-    sdata = st.session_state.responses.get(current_session_id, {})
-    answered_cnt = len(sdata.get("questions", {}))
-    total_q = len(current_session["questions"])
-
-    if answered_cnt == total_q and total_q > 0:
-        st.success("✅ Session complete - ready for beta reading!")
+    # Get feedback for current question only
+    current_question_feedback = get_beta_feedback_for_current_question()
+    
+    if current_question_feedback:
+        st.success("✅ Your story is ready for beta reading!")
         
         col1, col2 = st.columns([2, 1])
         with col1: 
-            fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type")
+            fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type_single")
         with col2:
-            if st.button("🦋 Get Beta Reader Feedback", use_container_width=True, type="primary"):
-                with st.spinner("Analyzing your stories..."):
+            if st.button("🦋 Get Feedback on This Story", use_container_width=True, type="primary"):
+                with st.spinner("Analyzing your story..."):
                     if beta_reader:
-                        # Get all answers for this session, strip HTML
-                        session_text = ""
-                        for q, a in sdata.get("questions", {}).items():
-                            text_only = re.sub(r'<[^>]+>', '', a.get("answer", ""))
-                            session_text += f"Question: {q}\nAnswer: {text_only}\n\n"
+                        session_text = f"Question: {current_question_feedback['question']}\nAnswer: {current_question_feedback['answer']}\n\n"
                         
                         if session_text.strip():
-                            fb = generate_beta_reader_feedback(current_session["title"], session_text, fb_type)
+                            fb = generate_beta_reader_feedback(
+                                f"{current_session['title']} - {current_question_feedback['question'][:50]}", 
+                                session_text, 
+                                fb_type
+                            )
                             if "error" not in fb: 
                                 st.session_state.current_beta_feedback = fb
                                 st.session_state.show_beta_reader = True
@@ -2122,7 +2234,7 @@ with tab1:
                         else: 
                             st.error("No content to analyze")
     else: 
-        st.info(f"Complete all {total_q} topics in this session to get beta reader feedback.")
+        st.info("Write your story above and click 'Save Story' to get beta reader feedback.")
 
 with tab2:
     st.markdown("### 📚 Your Saved Feedback (Forever)")
@@ -2132,7 +2244,7 @@ with tab2:
     all_feedback = user_data.get("beta_feedback", {})
     
     if not all_feedback:
-        st.info("No saved feedback yet. Generate feedback from any completed session and it will appear here forever.")
+        st.info("No saved feedback yet. Generate feedback from any story and it will appear here forever.")
     else:
         # Create a reverse chronological list of all feedback
         all_entries = []
