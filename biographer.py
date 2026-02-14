@@ -1909,20 +1909,21 @@ if st.session_state.logged_in:
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
 # ============================================================================
-# QUILL EDITOR - FIXED
+# QUILL EDITOR - FIXED (NO REFRESH, INSERT WORKS)
 # ============================================================================
-# Track question changes without modifying the editor key
-current_question_id = f"{current_session_id}_{current_question_text}"
-if st.session_state.get('last_question_id') != current_question_id:
-    st.session_state.last_question_id = current_question_id
-    # Clear the content key for the new question
-    content_key = f"quill_{current_session_id}_{current_question_text[:20]}_content"
-    if content_key in st.session_state:
-        del st.session_state[content_key]
-
-# Use a STABLE editor key WITHOUT version number
+# Use a STABLE editor key
 editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
 content_key = f"{editor_key}_content"
+
+# Track question changes separately
+current_question_id = f"{current_session_id}_{current_question_text}"
+if 'last_question_id' not in st.session_state:
+    st.session_state.last_question_id = current_question_id
+elif st.session_state.last_question_id != current_question_id:
+    st.session_state.last_question_id = current_question_id
+    # Clear content for new question
+    if content_key in st.session_state:
+        del st.session_state[content_key]
 
 # Initialize session state for this editor's content
 if content_key not in st.session_state:
@@ -1938,20 +1939,24 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ONE Quill editor with STABLE key
+# Store the last known value separately (THIS GOES HERE)
+if f"{content_key}_last_value" not in st.session_state:
+    st.session_state[f"{content_key}_last_value"] = st.session_state[content_key]
+
+# ONE Quill editor with STABLE key (THIS GOES HERE)
 content = st_quill(
     st.session_state[content_key],
-    editor_key
+    key=editor_key
 )
 
-# Update session state when editor changes
-if content is not None:
+# ONLY update if content changed AND it's different from last known value (THIS GOES HERE)
+if content is not None and content != st.session_state[f"{content_key}_last_value"]:
     st.session_state[content_key] = content
+    st.session_state[f"{content_key}_last_value"] = content
 
 user_input = st.session_state[content_key]
 
 st.markdown("---")
-
 # ============================================================================
 # IMAGE UPLOAD SECTION
 # ============================================================================
