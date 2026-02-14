@@ -1860,24 +1860,20 @@ if st.session_state.logged_in and st.session_state.image_handler:
                 else:
                     st.markdown("*No caption*")
             
-            with col3:
-                if st.button(f"➕ Insert", key=f"ins_{img['id']}_{idx}", use_container_width=True):
-                    if img.get("full_html"):
-                        current = st.session_state.get(content_key, "")
-                        
-                        if current in ["<p><br></p>", "<p>Start writing your story here...</p>"]:
-                            current = ""
-                        
-                        img_html = img["full_html"]
-                        if caption_text:
-                            img_html += f"<p><em>📸 {caption_text}</em></p>"
-                        
-                        if current:
-                            st.session_state[content_key] = current + "<br><br>" + img_html
-                        else:
-                            st.session_state[content_key] = img_html
-                        
-                        st.rerun()
+with col3:
+    if st.button(f"➕ Insert", key=f"ins_{img['id']}_{idx}", use_container_width=True):
+        if img.get("full_html"):
+            # Get current content
+            current = st.session_state.get(content_key, "")
+            
+            # If empty or placeholder, replace
+            if not current or current in ["<p><br></p>", "<p>Start writing your story here...</p>"]:
+                st.session_state[content_key] = img["full_html"]
+            else:
+                # Append to existing
+                st.session_state[content_key] = current + "<br><br>" + img["full_html"]
+            
+            st.rerun()
         
         st.markdown("---")
     
