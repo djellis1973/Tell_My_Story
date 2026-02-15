@@ -2884,7 +2884,7 @@ if content_key not in st.session_state:
 st.markdown("### ✍️ Your Story")
 st.markdown("""
 <div style="background-color: #f0f8ff; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #36cfc9;">
-    📸 <strong>Drag & drop images</strong> directly into the editor to add photos to your story.
+    📸 <strong>Drag & drop images</strong> directly into the editor.
 </div>
 """, unsafe_allow_html=True)
 
@@ -2908,20 +2908,14 @@ if st.session_state.logged_in and st.session_state.image_handler:
     
     if existing_images:
         st.markdown("### 📸 Your Uploaded Photos")
-        st.markdown("*Your uploaded photos are shown below. Drag and drop them directly into the editor above to add them to your story.*")
+        st.markdown("*Drag and drop photos directly into the editor above*")
         
         for idx, img in enumerate(existing_images):
-            col1, col2 = st.columns([2, 3])
+            col1, col2, col3 = st.columns([2, 3, 1])
             
             with col1:
-                # Use st.image instead of raw HTML for reliable display
-                if img.get("thumb_html"):
-                    # Extract base64 from the HTML
-                    html_content = img.get("thumb_html", "")
-                    match = re.search(r'src="data:image/jpeg;base64,([^"]+)"', html_content)
-                    if match:
-                        b64 = match.group(1)
-                        st.image(f"data:image/jpeg;base64,{b64}", use_container_width=True)
+                # Use the working thumbnail HTML
+                st.markdown(img.get("thumb_html", ""), unsafe_allow_html=True)
             
             with col2:
                 caption_text = img.get("caption", "")
@@ -2929,7 +2923,9 @@ if st.session_state.logged_in and st.session_state.image_handler:
                     st.markdown(f"**📝 Caption:** {caption_text}")
                 else:
                     st.markdown("*No caption*")
-                if st.button(f"🗑️ Delete", key=f"del_img_{img['id']}_{idx}"):
+            
+            with col3:
+                if st.button(f"🗑️", key=f"del_img_{img['id']}_{idx}"):
                     st.session_state.image_handler.delete_image(img['id'])
                     st.rerun()
         
