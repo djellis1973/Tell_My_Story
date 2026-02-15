@@ -1497,7 +1497,6 @@ def initialize_question_bank():
     return False
 
 def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
-    """Load a question bank and return to main Q&A screen"""
     st.session_state.current_question_bank = sessions
     st.session_state.current_bank_name = bank_name
     st.session_state.current_bank_type = bank_type
@@ -1506,17 +1505,14 @@ def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
     st.session_state.current_question = 0
     st.session_state.current_question_override = None
     
-    # Initialize response structure for new sessions
     for s in sessions:
         sid = s["id"]
         if sid not in st.session_state.responses:
             st.session_state.responses[sid] = {
-                "title": s["title"], 
-                "questions": {}, 
-                "summary": "",
-                "completed": False, 
-                "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
+                "title": s["title"], "questions": {}, "summary": "",
+                "completed": False, "word_target": s.get("word_target", DEFAULT_WORD_TARGET)
             }
+
 # ============================================================================
 # BETA READER FUNCTIONS
 # ============================================================================
@@ -1911,104 +1907,30 @@ def show_bank_manager():
         st.error("Question Bank Manager not available"); 
         st.session_state.show_bank_manager = False; 
         return
-    
     user_id = st.session_state.get('user_id')
     if st.session_state.qb_manager is None: 
         st.session_state.qb_manager = QuestionBankManager(user_id)
     else: 
         st.session_state.qb_manager.user_id = user_id
-    
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    
-    # Header with back button
-    col1, col2 = st.columns([6, 1])
-    with col1:
-        st.title("📚 Question Bank Selector")
-        st.caption("Choose which set of chapters to work on")
-    with col2:
-        if st.button("✕", key="close_bank_manager"):
-            st.session_state.show_bank_manager = False
-            st.rerun()
-    
-    st.divider()
-    
-    # Display available banks
-    banks = st.session_state.qb_manager.get_available_banks()
-    
-    if not banks:
-        st.warning("No question banks found")
-    else:
-        # Separate default and user banks
-        default_banks = [b for b in banks if b.get('type') == 'default']
-        user_banks = [b for b in banks if b.get('type') == 'user']
-        
-        if default_banks:
-            st.markdown("### 📖 Default Banks")
-            for bank in default_banks:
-                with st.container():
-                    st.markdown(f"**{bank['name']}**")
-                    st.caption(f"{bank.get('description', 'No description')} • {bank.get('session_count', 0)} sessions")
-                    
-                    # Show sessions in this bank
-                    with st.expander(f"📋 View Sessions in {bank['name']}", expanded=False):
-                        sessions = bank.get('sessions', [])
-                        for session in sessions:
-                            st.markdown(f"• **Session {session.get('id')}:** {session.get('title')}")
-                            if session.get('questions'):
-                                st.caption(f"  {len(session['questions'])} topics")
-                    
-                    col1, col2 = st.columns([1, 3])
-                    with col1:
-                        if st.button(f"📥 Load", key=f"load_default_{bank['id']}", type="primary"):
-                            # Load this bank
-                            sessions = st.session_state.qb_manager.load_bank(bank['id'])
-                            if sessions:
-                                load_question_bank(
-                                    sessions, 
-                                    bank['name'], 
-                                    'default', 
-                                    bank['id']
-                                )
-                                st.session_state.show_bank_manager = False
-                                st.success(f"✅ Loaded: {bank['name']}")
-                                time.sleep(1)
-                                st.rerun()
-                    st.divider()
-        
-        if user_banks:
-            st.markdown("### 👤 Your Custom Banks")
-            for bank in user_banks:
-                with st.container():
-                    st.markdown(f"**{bank['name']}**")
-                    st.caption(f"{bank.get('description', 'No description')} • {bank.get('session_count', 0)} sessions")
-                    
-                    # Show sessions
-                    with st.expander(f"📋 View Sessions in {bank['name']}", expanded=False):
-                        sessions = bank.get('sessions', [])
-                        for session in sessions:
-                            st.markdown(f"• **Session {session.get('id')}:** {session.get('title')}")
-                            if session.get('questions'):
-                                st.caption(f"  {len(session['questions'])} topics")
-                    
-                    col1, col2 = st.columns([1, 3])
-                    with col1:
-                        if st.button(f"📥 Load", key=f"load_user_{bank['id']}", type="primary"):
-                            sessions = st.session_state.qb_manager.load_bank(bank['id'])
-                            if sessions:
-                                load_question_bank(
-                                    sessions, 
-                                    bank['name'], 
-                                    'user', 
-                                    bank['id']
-                                )
-                                st.session_state.show_bank_manager = False
-                                st.success(f"✅ Loaded: {bank['name']}")
-                                time.sleep(1)
-                                st.rerun()
-                    st.divider()
-    
+    if st.button("←", key="bank_manager_back"): 
+        st.session_state.show_bank_manager = False; 
+        st.rerun()
+    st.session_state.qb_manager.display_bank_selector()
     st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
+
+def show_bank_editor():
+    if not QuestionBankManager or not st.session_state.get('editing_bank_id'): 
+        st.session_state.show_bank_editor = False; 
+        return
+    user_id = st.session_state.get('user_id')
+    if st.session_state.qb_manager is None: 
+        st.session_state.qb_manager = QuestionBankManager(user_id)
+    else: 
+        st.session_state.qb_manager.user_id = user_id
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    st.session_state.qb_manager.display_bank_editor(st.session_state.editing_bank_id)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ============================================================================
 # PDF GENERATION FUNCTIONS
@@ -2633,14 +2555,13 @@ with st.sidebar:
             st.session_state.show_cover_designer = True
             st.rerun()
     
-st.divider()
-st.header("📚 Question Bank Selector")
-st.caption("Choose your Default Chapters")
-if st.button("📋 Select Question Bank", width='stretch', type="primary"): 
-    st.session_state.show_bank_manager = True; 
-    st.rerun()
-if st.session_state.get('current_bank_name'): 
-    st.info(f"**Current Bank:**\n{st.session_state.current_bank_name}")
+    st.divider()
+    st.header("📚 Question Banks")
+    if st.button("📋 Bank Manager", width='stretch', type="primary"): 
+        st.session_state.show_bank_manager = True; 
+        st.rerun()
+    if st.session_state.get('current_bank_name'): 
+        st.info(f"**Current Bank:**\n{st.session_state.current_bank_name}")
     
     st.divider()
     st.header("📖 Sessions")
