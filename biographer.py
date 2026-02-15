@@ -2957,12 +2957,13 @@ with col3:
 st.divider()
 
 # ============================================================================
-# PREVIEW SECTION
+# PREVIEW SECTION - FIXED
 # ============================================================================
-if user_input and user_input != "<p><br></p>" and user_input != "<p>Start writing your story here...</p>":
+current_content = st.session_state.get(content_key, "")
+if current_content and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>":
     with st.expander("👁️ Preview your story", expanded=False):
         st.markdown("### 📖 Preview")
-        st.markdown(user_input, unsafe_allow_html=True)
+        st.markdown(current_content, unsafe_allow_html=True)
         st.markdown("---")
 
 # ============================================================================
