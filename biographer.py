@@ -4,7 +4,7 @@ import json
 from datetime import datetime, date
 from openai import OpenAI
 import os
-import re
+import reFixed display function
 import hashlib
 import smtplib
 from email.mime.text import MIMEText
@@ -1653,7 +1653,7 @@ def generate_beta_reader_feedback(session_title, session_text, feedback_type="co
 
 # FIX 3: Fixed save_beta_feedback function to properly save
 def save_beta_feedback(user_id, session_id, feedback_data):
-    if not beta_reader: 
+    if not user_id:
         return False
     
     try:
@@ -1675,11 +1675,22 @@ def save_beta_feedback(user_id, session_id, feedback_data):
         if "generated_at" not in feedback_data:
             feedback_data["generated_at"] = datetime.now().isoformat()
         
+        # Add feedback type if not present
+        if "feedback_type" not in feedback_data:
+            feedback_data["feedback_type"] = "comprehensive"
+        
+        # Add session title for context
+        for s in SESSIONS:
+            if str(s["id"]) == session_key:
+                feedback_data["session_title"] = s["title"]
+                break
+        
         # Append new feedback
         user_data["beta_feedback"][session_key].append(feedback_data)
         
-        # Save back to file
-        save_user_data(user_id, user_data.get("responses", {}))
+        # Save back to file using the existing save_user_data function
+        # Make sure we're passing the responses data correctly
+        save_user_data(user_id, st.session_state.responses)
         
         return True
     except Exception as e:
@@ -1741,6 +1752,76 @@ def display_saved_feedback(user_id, session_id):
                 st.markdown("**Suggestions:**")
                 for sug in fb['suggestions']:
                     st.markdown(f"💡 {sug}")
+# ============================================================================
+# FIX 2: NEW function to display beta feedback with proper formatting
+# ============================================================================
+def display_beta_feedback(feedback_data):
+    """Display beta feedback in a styled container below the answer box"""
+    if not feedback_data:
+        return
+    
+    st.markdown("---")
+    st.markdown("### 🦋 Beta Reader Feedback")
+    
+    with st.container():
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("✕", key="close_beta_feedback"):
+                st.session_state.beta_feedback_display = None
+                if "beta_feedback_storage" in st.session_state:
+                    st.session_state.beta_feedback_storage = {}
+                st.rerun()
+        
+        if 'error' in feedback_data:
+            st.error(f"Error: {feedback_data['error']}")
+            return
+        
+        # Save button for feedback
+        col_save1, col_save2, col_save3 = st.columns([1, 2, 1])
+        with col_save2:
+            if st.button("💾 Save This Feedback to History", key="save_beta_feedback", type="primary", use_container_width=True):
+                result = save_beta_feedback(
+                    st.session_state.user_id,
+                    st.session_state.current_question_bank[st.session_state.current_session]["id"],
+                    feedback_data
+                )
+                if result:
+                    st.success("✅ Feedback saved to history!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Failed to save feedback")
+        
+        st.markdown("---")
+        
+        # Check if feedback contains markdown in 'feedback' field
+        if 'feedback' in feedback_data and feedback_data['feedback']:
+            # Display the markdown content directly - this will format nicely
+            st.markdown(feedback_data['feedback'])
+        else:
+            # Fallback to structured display if no feedback field
+            if 'summary' in feedback_data and feedback_data['summary']:
+                st.markdown("**Summary:**")
+                st.info(feedback_data['summary'])
+            
+            if 'strengths' in feedback_data and feedback_data['strengths']:
+                st.markdown("**Strengths:**")
+                for s in feedback_data['strengths']:
+                    st.markdown(f"✅ {s}")
+            
+            if 'areas_for_improvement' in feedback_data and feedback_data['areas_for_improvement']:
+                st.markdown("**Areas for Improvement:**")
+                for a in feedback_data['areas_for_improvement']:
+                    st.markdown(f"📝 {a}")
+            
+            if 'suggestions' in feedback_data and feedback_data['suggestions']:
+                st.markdown("**Suggestions:**")
+                for sug in feedback_data['suggestions']:
+                    st.markdown(f"💡 {sug}")
+            
+            if 'overall_score' in feedback_data and feedback_data['overall_score']:
+                st.markdown(f"**Overall Score:** {feedback_data['overall_score']}/10")
+
 
 # ============================================================================
 # VIGNETTE FUNCTIONS
@@ -3119,7 +3200,7 @@ if user_input and user_input != "<p><br></p>" and user_input != "<p>Start writin
         st.markdown("---")
 
 # ============================================================================
-# FIX 1: BETA READER FEEDBACK SECTION - Now with option to check progress
+# BETA READER FEEDBACK SECTION - COMPLETE FIXED VERSION
 # ============================================================================
 st.subheader("🦋 Beta Reader Feedback")
 
@@ -3134,13 +3215,22 @@ with tab1:
     # Show progress
     st.markdown(f"**Progress:** {answered_cnt}/{total_q} topics answered")
     
-    # Always show the option to get feedback, with appropriate messaging
+    # Generate unique key for this session/question to prevent feedback carrying over
+    beta_key = f"beta_{current_session_id}_{current_question_text}"
+    
+    # Initialize storage if not exists
+    if "beta_feedback_storage" not in st.session_state:
+        st.session_state.beta_feedback_storage = {}
+    
+    # Always show the option to get beta reader feedback
     col1, col2 = st.columns([2, 1])
     with col1: 
-        fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type")
+        fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], 
+                              key=f"beta_type_{beta_key}")
     with col2:
-        if st.button("🦋 Check Progress", width='stretch', type="primary"):
-            with st.spinner("Analyzing your stories..."):
+        # FIX: Changed button text to "Get Beta Read"
+        if st.button("🦋 Get Beta Read", key=f"beta_btn_{beta_key}", width='stretch', type="primary"):
+            with st.spinner("Beta Reader is analyzing your stories..."):
                 if beta_reader:
                     # Get all answers for this session, strip HTML
                     session_text = ""
@@ -3156,7 +3246,10 @@ with tab1:
                         full_text = gps_context + "\n\n" + session_text if gps_context else session_text
                         fb = generate_beta_reader_feedback(current_session["title"], full_text, fb_type)
                         if "error" not in fb: 
+                            # Store feedback with session/question context
                             st.session_state.beta_feedback_display = fb
+                            # Also store in session-specific storage to prevent carryover
+                            st.session_state.beta_feedback_storage[beta_key] = fb
                             st.rerun()
                         else: 
                             st.error(f"Failed: {fb['error']}")
@@ -3165,19 +3258,24 @@ with tab1:
                 else:
                     st.error("Beta reader not available")
     
-    # Show feedback if we have it - FIX 2: Display below editor
-    if st.session_state.beta_feedback_display:
+    # FIX: Clear feedback when changing topics by checking if we're on the right key
+    # Only show feedback if it matches the current beta_key
+    if beta_key in st.session_state.beta_feedback_storage:
+        display_beta_feedback(st.session_state.beta_feedback_storage[beta_key])
+    elif st.session_state.beta_feedback_display and not st.session_state.beta_feedback_storage:
+        # Fallback for backward compatibility
         display_beta_feedback(st.session_state.beta_feedback_display)
 
 with tab2:
-    st.markdown("### 📚 Your Saved Feedback (Forever)")
+    # FIX: Changed header text
+    st.markdown("### 📚 Your Saved Beta Reader Feedback")
     
     # Load all feedback
     user_data = load_user_data(st.session_state.user_id) if st.session_state.user_id else {}
     all_feedback = user_data.get("beta_feedback", {})
     
     if not all_feedback:
-        st.info("No saved feedback yet. Generate feedback from any completed session and it will appear here forever.")
+        st.info("No saved feedback yet. Generate feedback from any session and click 'Save This Feedback to History' to keep it forever.")
     else:
         # Create a reverse chronological list of all feedback
         all_entries = []
@@ -3213,7 +3311,7 @@ with tab2:
                 with col2:
                     st.markdown(f"**Type:** {fb.get('feedback_type', 'comprehensive').title()}")
                 with col3:
-                    if st.button(f"🗑️ Delete", key=f"del_fb_{i}_{entry['date']}", width='stretch'):
+                    if st.button(f"🗑️ Delete", key=f"del_fb_history_{i}_{entry['date']}", use_container_width=True):
                         # Delete this specific feedback
                         session_id_str = entry['session_id']
                         feedback_list = all_feedback.get(session_id_str, [])
@@ -3228,40 +3326,36 @@ with tab2:
                         
                         # Save updated data
                         user_data["beta_feedback"] = all_feedback
-                        save_user_data(st.session_state.user_id, user_data.get("responses", {}))
+                        # Save using the correct function
+                        save_user_data(st.session_state.user_id, st.session_state.responses)
                         st.success("Feedback deleted!")
                         st.rerun()
                 
-                # Overall score if available
-                if fb.get('overall_score'):
-                    st.markdown(f"**Overall Score:** {fb['overall_score']}/10")
-                
                 # Display the feedback content
-                if 'summary' in fb and fb['summary']:
-                    st.markdown("**Summary:**")
-                    st.markdown(fb['summary'])
-                
-                if 'strengths' in fb and fb['strengths']:
-                    st.markdown("**Strengths:**")
-                    for s in fb['strengths']:
-                        st.markdown(f"✅ {s}")
-                
-                if 'areas_for_improvement' in fb and fb['areas_for_improvement']:
-                    st.markdown("**Areas for Improvement:**")
-                    for a in fb['areas_for_improvement']:
-                        st.markdown(f"📝 {a}")
-                
-                if 'suggestions' in fb and fb['suggestions']:
-                    st.markdown("**Suggestions:**")
-                    for sug in fb['suggestions']:
-                        st.markdown(f"💡 {sug}")
-                
-                # Raw feedback if nothing else
-                if not any([fb.get('summary'), fb.get('strengths'), fb.get('areas_for_improvement'), fb.get('suggestions')]):
-                    st.json(fb)
-
-st.divider()
-
+                if 'feedback' in fb and fb['feedback']:
+                    st.markdown(fb['feedback'])
+                else:
+                    if 'summary' in fb and fb['summary']:
+                        st.markdown("**Summary:**")
+                        st.markdown(fb['summary'])
+                    
+                    if 'strengths' in fb and fb['strengths']:
+                        st.markdown("**Strengths:**")
+                        for s in fb['strengths']:
+                            st.markdown(f"✅ {s}")
+                    
+                    if 'areas_for_improvement' in fb and fb['areas_for_improvement']:
+                        st.markdown("**Areas for Improvement:**")
+                        for a in fb['areas_for_improvement']:
+                            st.markdown(f"📝 {a}")
+                    
+                    if 'suggestions' in fb and fb['suggestions']:
+                        st.markdown("**Suggestions:**")
+                        for sug in fb['suggestions']:
+                            st.markdown(f"💡 {sug}")
+                    
+                    if 'overall_score' in fb and fb['overall_score']:
+                        st.markdown(f"**Overall Score:** {fb['overall_score']}/10")
 # ============================================================================
 # SESSION PROGRESS
 # ============================================================================
