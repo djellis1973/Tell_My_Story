@@ -996,20 +996,12 @@ def render_enhanced_profile():
 def render_narrative_gps():
     """Render the Narrative GPS questionnaire in the profile"""
     st.markdown("""
-    <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #ff4b4b;">
-    <p style="font-size: 1.1em; margin-bottom: 10px;">Before we write a single word, let's understand why this book matters.</p>
+    <div style="background-color: #e6f3ff; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #0066cc;">
+    <p style="color: #004d99;">Your answers to these questions help me support you properly throughout the process and make sure the finished book is exactly right for you and your readers.</p>
     
-    <p>Your story deserves to be told with intention. These questions help us uncover:</p>
+    <p style="color: #004d99;">The more open and detailed you are here, the easier it is for your real voice and personality to come through on every page. Think of this as a conversation between you and the person who will read your story one day — and I'm here alongside you, listening, capturing what matters, and helping shape it into something lasting.</p>
     
-    <ul style="margin-left: 20px;">
-        <li>Who needs to hear what you have to say</li>
-        <li>What you want readers to feel when they close the book</li>
-        <li>The legacy you're leaving behind</li>
-    </ul>
-    
-    <p><strong>The more honest and detailed you are here, the more your true voice will shine through every page.</strong> Think of this as a conversation between you and your future reader—one where I'm just here to take notes and guide the way.</p>
-    
-    <p>Take your time. Come back and update whenever inspiration strikes. This is your story's foundation, and we want it solid.</p>
+    <p style="color: #004d99;"><strong>There's no rush.</strong> You can return and add to this whenever new thoughts or memories surface. This is where your story truly begins.</p>
     </div>
     """, unsafe_allow_html=True)
     
