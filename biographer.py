@@ -1521,12 +1521,59 @@ def generate_beta_reader_feedback(session_title, session_text, feedback_type="co
         return {"error": "BetaReader not available"}
     return beta_reader.generate_feedback(session_title, session_text, feedback_type)
 
+# ============================================================================
+# FIXED: save_beta_feedback function
+# ============================================================================
 def save_beta_feedback(user_id, session_id, feedback_data):
     if not user_id:
         return False
     
     try:
-        user_data = load_user_data(user_id)
+        # Get the filename for this user
+        filename = get_user_filename(user_id)
+        
+        # Load existing data
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                user_data = json.load(f)
+        else:
+            user_data = {"responses": {}, "vignettes": [], "beta_feedback": {}}
+        
+        # Initialize beta_feedback if it doesn't exist
+        if "beta_feedback" not in user_data:
+            user_data["beta_feedback"] = {}
+        
+        # Convert session_id to string
+        session_key = str(session_id)
+        
+        # Initialize list for this session if it doesn't exist
+        if session_key not in user_data["beta_feedback"]:
+            user_data["beta_feedback"][session_key] = []
+        
+        # Add metadata to feedback
+        feedback_copy = feedback_data.copy()
+        if "generated_at" not in feedback_copy:
+            feedback_copy["generated_at"] = datetime.now().isoformat()
+        if "feedback_type" not in feedback_copy:
+            feedback_copy["feedback_type"] = "comprehensive"
+        
+        # Add session title
+        for s in SESSIONS:
+            if str(s["id"]) == session_key:
+                feedback_copy["session_title"] = s["title"]
+                break
+        
+        # Append feedback
+        user_data["beta_feedback"][session_key].append(feedback_copy)
+        
+        # Write back to file
+        with open(filename, 'w') as f:
+            json.dump(user_data, f, indent=2)
+        
+        return True
+    except Exception as e:
+        print(f"Error saving feedback: {e}")
+        return False
         
         if "beta_feedback" not in user_data:
             user_data["beta_feedback"] = {}
