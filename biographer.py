@@ -2555,13 +2555,14 @@ with st.sidebar:
             st.session_state.show_cover_designer = True
             st.rerun()
     
-    st.divider()
-    st.header("📚 Question Banks")
-    if st.button("📋 Bank Manager", width='stretch', type="primary"): 
-        st.session_state.show_bank_manager = True; 
-        st.rerun()
-    if st.session_state.get('current_bank_name'): 
-        st.info(f"**Current Bank:**\n{st.session_state.current_bank_name}")
+st.divider()
+st.header("📚 Question Bank Selector")
+st.caption("Choose your Default Chapters")
+if st.button("📋 Select Question Bank", width='stretch', type="primary"): 
+    st.session_state.show_bank_manager = True; 
+    st.rerun()
+if st.session_state.get('current_bank_name'): 
+    st.info(f"**Current Bank:**\n{st.session_state.current_bank_name}")
     
     st.divider()
     st.header("📖 Sessions")
