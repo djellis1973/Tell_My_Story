@@ -80,7 +80,9 @@ default_state = {
     "confirm_delete": None, "user_account": None, "show_profile_setup": False,
     "image_handler": None, "show_image_manager": False, "show_ai_suggestions": False,
     "current_ai_suggestions": None, "current_suggestion_topic": None, "editor_content": {},
-    "show_privacy_settings": False, "show_cover_designer": False
+    "show_privacy_settings": False, "show_cover_designer": False,
+    # FIX 1: Add state for beta feedback display
+    "beta_feedback_display": None
 }
 for key, value in default_state.items():
     if key not in st.session_state:
@@ -1649,10 +1651,40 @@ def generate_beta_reader_feedback(session_title, session_text, feedback_type="co
         return {"error": "BetaReader not available"}
     return beta_reader.generate_feedback(session_title, session_text, feedback_type)
 
+# FIX 3: Fixed save_beta_feedback function to properly save
 def save_beta_feedback(user_id, session_id, feedback_data):
     if not beta_reader: 
         return False
-    return beta_reader.save_feedback(user_id, session_id, feedback_data, get_user_filename, load_user_data)
+    
+    try:
+        # Load existing user data
+        user_data = load_user_data(user_id)
+        
+        # Initialize beta_feedback if it doesn't exist
+        if "beta_feedback" not in user_data:
+            user_data["beta_feedback"] = {}
+        
+        # Convert session_id to string for dictionary key
+        session_key = str(session_id)
+        
+        # Initialize list for this session if it doesn't exist
+        if session_key not in user_data["beta_feedback"]:
+            user_data["beta_feedback"][session_key] = []
+        
+        # Add timestamp if not present
+        if "generated_at" not in feedback_data:
+            feedback_data["generated_at"] = datetime.now().isoformat()
+        
+        # Append new feedback
+        user_data["beta_feedback"][session_key].append(feedback_data)
+        
+        # Save back to file
+        save_user_data(user_id, user_data.get("responses", {}))
+        
+        return True
+    except Exception as e:
+        print(f"Error saving feedback: {e}")
+        return False
 
 def get_previous_beta_feedback(user_id, session_id):
     if not beta_reader: 
@@ -2247,6 +2279,64 @@ def generate_zip(book_title, author_name, stories):
     return zip_buffer.getvalue()
 
 # ============================================================================
+# FIX 2: New function to display beta feedback directly below the editor
+# ============================================================================
+def display_beta_feedback(feedback_data):
+    """Display beta feedback in a styled container below the answer box"""
+    if not feedback_data:
+        return
+    
+    st.markdown("---")
+    st.markdown("### 🦋 Beta Reader Feedback")
+    
+    with st.container():
+        col1, col2 = st.columns([6, 1])
+        with col2:
+            if st.button("✕", key="close_beta_feedback"):
+                st.session_state.beta_feedback_display = None
+                st.rerun()
+        
+        if 'error' in feedback_data:
+            st.error(f"Error: {feedback_data['error']}")
+            return
+        
+        # Save button for feedback
+        if st.button("💾 Save This Feedback", key="save_beta_feedback", type="primary"):
+            if save_beta_feedback(
+                st.session_state.user_id,
+                st.session_state.current_question_bank[st.session_state.current_session]["id"],
+                feedback_data
+            ):
+                st.success("✅ Feedback saved to history!")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("Failed to save feedback")
+        
+        # Display feedback content
+        if 'summary' in feedback_data:
+            st.markdown("**Summary:**")
+            st.markdown(feedback_data['summary'])
+        
+        if 'strengths' in feedback_data:
+            st.markdown("**Strengths:**")
+            for s in feedback_data['strengths']:
+                st.markdown(f"✅ {s}")
+        
+        if 'areas_for_improvement' in feedback_data:
+            st.markdown("**Areas for Improvement:**")
+            for a in feedback_data['areas_for_improvement']:
+                st.markdown(f"📝 {a}")
+        
+        if 'suggestions' in feedback_data:
+            st.markdown("**Suggestions:**")
+            for sug in feedback_data['suggestions']:
+                st.markdown(f"💡 {sug}")
+        
+        if 'overall_score' in feedback_data:
+            st.markdown(f"**Overall Score:** {feedback_data['overall_score']}/10")
+
+# ============================================================================
 # PAGE CONFIG
 # ============================================================================
 st.set_page_config(page_title="Tell My Story - Your Life Timeline", page_icon="📖", layout="wide", initial_sidebar_state="expanded")
@@ -2513,14 +2603,9 @@ if st.session_state.show_bank_manager:
     show_bank_manager()
 if st.session_state.show_bank_editor: 
     show_bank_editor()
-if st.session_state.show_beta_reader and st.session_state.current_beta_feedback: 
-    if beta_reader:
-        beta_reader.show_modal(st.session_state.current_beta_feedback, 
-                              {"id": SESSIONS[st.session_state.current_session]["id"], 
-                               "title": SESSIONS[st.session_state.current_session]["title"]},
-                              st.session_state.user_id, 
-                              save_beta_feedback, 
-                              lambda: st.session_state.update(show_beta_reader=False, current_beta_feedback=None))
+
+# FIX 2: Remove modal handling for beta reader - now displayed inline
+
 if st.session_state.show_vignette_detail: 
     show_vignette_detail()
 if st.session_state.show_vignette_manager: 
@@ -3026,7 +3111,7 @@ if user_input and user_input != "<p><br></p>" and user_input != "<p>Start writin
         st.markdown("---")
 
 # ============================================================================
-# BETA READER FEEDBACK SECTION
+# FIX 1: BETA READER FEEDBACK SECTION - Now with option to check progress
 # ============================================================================
 st.subheader("🦋 Beta Reader Feedback")
 
@@ -3038,39 +3123,43 @@ with tab1:
     answered_cnt = len(sdata.get("questions", {}))
     total_q = len(current_session["questions"])
 
-    if answered_cnt == total_q and total_q > 0:
-        st.success("✅ Session complete - ready for beta reading!")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1: 
-            fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type")
-        with col2:
-            if st.button("🦋 Get Beta Reader Feedback", width='stretch', type="primary"):
-                with st.spinner("Analyzing your stories..."):
-                    if beta_reader:
-                        # Get all answers for this session, strip HTML
-                        session_text = ""
-                        for q, a in sdata.get("questions", {}).items():
-                            text_only = re.sub(r'<[^>]+>', '', a.get("answer", ""))
-                            session_text += f"Question: {q}\nAnswer: {text_only}\n\n"
-                        
-                        # Add Narrative GPS context for AI suggestions
-                        gps_context = get_narrative_gps_for_ai()
-                        
-                        if session_text.strip():
-                            # Combine session text with GPS context
-                            full_text = gps_context + "\n\n" + session_text if gps_context else session_text
-                            fb = generate_beta_reader_feedback(current_session["title"], full_text, fb_type)
-                            if "error" not in fb: 
-                                st.session_state.current_beta_feedback = fb
-                                st.session_state.show_beta_reader = True
-                                st.rerun()
-                            else: 
-                                st.error(f"Failed: {fb['error']}")
+    # Show progress
+    st.markdown(f"**Progress:** {answered_cnt}/{total_q} topics answered")
+    
+    # Always show the option to get feedback, with appropriate messaging
+    col1, col2 = st.columns([2, 1])
+    with col1: 
+        fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key="beta_type")
+    with col2:
+        if st.button("🦋 Check Progress", width='stretch', type="primary"):
+            with st.spinner("Analyzing your stories..."):
+                if beta_reader:
+                    # Get all answers for this session, strip HTML
+                    session_text = ""
+                    for q, a in sdata.get("questions", {}).items():
+                        text_only = re.sub(r'<[^>]+>', '', a.get("answer", ""))
+                        session_text += f"Question: {q}\nAnswer: {text_only}\n\n"
+                    
+                    # Add Narrative GPS context for AI suggestions
+                    gps_context = get_narrative_gps_for_ai()
+                    
+                    if session_text.strip():
+                        # Combine session text with GPS context
+                        full_text = gps_context + "\n\n" + session_text if gps_context else session_text
+                        fb = generate_beta_reader_feedback(current_session["title"], full_text, fb_type)
+                        if "error" not in fb: 
+                            st.session_state.beta_feedback_display = fb
+                            st.rerun()
                         else: 
-                            st.error("No content to analyze")
-    else: 
-        st.info(f"Complete all {total_q} topics in this session to get beta reader feedback.")
+                            st.error(f"Failed: {fb['error']}")
+                    else: 
+                        st.warning("No content to analyze. Write some stories first!")
+                else:
+                    st.error("Beta reader not available")
+    
+    # Show feedback if we have it - FIX 2: Display below editor
+    if st.session_state.beta_feedback_display:
+        display_beta_feedback(st.session_state.beta_feedback_display)
 
 with tab2:
     st.markdown("### 📚 Your Saved Feedback (Forever)")
