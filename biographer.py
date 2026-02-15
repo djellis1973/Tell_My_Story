@@ -2314,27 +2314,35 @@ def display_beta_feedback(feedback_data):
                 st.error("Failed to save feedback")
         
         # Display feedback content
-        if 'summary' in feedback_data:
+        if 'summary' in feedback_data and feedback_data['summary']:
             st.markdown("**Summary:**")
             st.markdown(feedback_data['summary'])
         
-        if 'strengths' in feedback_data:
+        if 'strengths' in feedback_data and feedback_data['strengths']:
             st.markdown("**Strengths:**")
             for s in feedback_data['strengths']:
                 st.markdown(f"✅ {s}")
         
-        if 'areas_for_improvement' in feedback_data:
+        if 'areas_for_improvement' in feedback_data and feedback_data['areas_for_improvement']:
             st.markdown("**Areas for Improvement:**")
             for a in feedback_data['areas_for_improvement']:
                 st.markdown(f"📝 {a}")
         
-        if 'suggestions' in feedback_data:
+        if 'suggestions' in feedback_data and feedback_data['suggestions']:
             st.markdown("**Suggestions:**")
             for sug in feedback_data['suggestions']:
                 st.markdown(f"💡 {sug}")
         
-        if 'overall_score' in feedback_data:
+        if 'overall_score' in feedback_data and feedback_data['overall_score']:
             st.markdown(f"**Overall Score:** {feedback_data['overall_score']}/10")
+        
+        # Debug: If none of the above, show raw data
+        if not any([feedback_data.get('summary'), 
+                   feedback_data.get('strengths'), 
+                   feedback_data.get('areas_for_improvement'), 
+                   feedback_data.get('suggestions'), 
+                   feedback_data.get('overall_score')]):
+            st.json(feedback_data)
 
 # ============================================================================
 # PAGE CONFIG
