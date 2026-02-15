@@ -2908,10 +2908,10 @@ if st.session_state.logged_in and st.session_state.image_handler:
     
     if existing_images:
         st.markdown("### 📸 Your Uploaded Photos")
-        st.markdown("*Click Insert to add the photo and caption to your story*")
+        st.markdown("*Your uploaded photos are shown below. Drag and drop them directly into the editor above to add them to your story.*")
         
         for idx, img in enumerate(existing_images):
-            col1, col2, col3 = st.columns([2, 3, 1])
+            col1, col2 = st.columns([2, 3])
             
             with col1:
                 # Use st.image instead of raw HTML for reliable display
@@ -2921,7 +2921,7 @@ if st.session_state.logged_in and st.session_state.image_handler:
                     match = re.search(r'src="data:image/jpeg;base64,([^"]+)"', html_content)
                     if match:
                         b64 = match.group(1)
-                        st.image(f"data:image/jpeg;base64,{b64}", width=150)
+                        st.image(f"data:image/jpeg;base64,{b64}", use_container_width=True)
             
             with col2:
                 caption_text = img.get("caption", "")
@@ -2929,19 +2929,9 @@ if st.session_state.logged_in and st.session_state.image_handler:
                     st.markdown(f"**📝 Caption:** {caption_text}")
                 else:
                     st.markdown("*No caption*")
-            
-            with col3:
-                if st.button(f"➕ Insert", key=f"insert_img_{img['id']}_{idx}"):
-                    # Get full image HTML
-                    full_html = img.get("full_html", "")
-                    if full_html:
-                        current_content = st.session_state.get(content_key, "")
-                        if current_content and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>":
-                            new_content = current_content + "<br><br>" + full_html
-                        else:
-                            new_content = full_html
-                        st.session_state[content_key] = new_content
-                        st.rerun()
+                if st.button(f"🗑️ Delete", key=f"del_img_{img['id']}_{idx}"):
+                    st.session_state.image_handler.delete_image(img['id'])
+                    st.rerun()
         
         st.markdown("---")
     
@@ -2972,7 +2962,7 @@ if st.session_state.logged_in and st.session_state.image_handler:
                     help="Full Page: 1600px wide, Inline: 800px wide"
                 )
             with col2:
-                if st.button("📤 Upload", key=f"btn_{current_session_id}_{hash(current_question_text)}", type="primary", width='stretch'):
+                if st.button("📤 Upload", key=f"btn_{current_session_id}_{hash(current_question_text)}", type="primary", use_container_width=True):
                     with st.spinner("Uploading and optimizing..."):
                         usage_type = "full_page" if usage == "Full Page" else "inline"
                         result = st.session_state.image_handler.save_image(
