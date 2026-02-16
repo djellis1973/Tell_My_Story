@@ -1985,14 +1985,13 @@ def show_vignette_detail():
             )
         with col2:
             if st.button("🦋 Get Beta Read", key=f"beta_vignette_btn_{vignette['id']}", type="primary", use_container_width=True):
-                with st.spinner("Beta Reader is analyzing your vignette..."):
+                with st.spinner("Beta Reader is analyzing your vignette with profile context..."):
                     if beta_reader:
                         vignette_text = vignette.get('content', '')
                         if vignette_text and len(vignette_text.strip()) > 50:
-                            session_text = f"Vignette Title: {vignette['title']}\n\nContent:\n{vignette_text}"
                             fb = generate_beta_reader_feedback(
                                 f"Vignette: {vignette['title']}", 
-                                session_text, 
+                                vignette_text,
                                 fb_type
                             )
                             if "error" not in fb: 
@@ -2001,7 +2000,7 @@ def show_vignette_detail():
                             else: 
                                 st.error(f"Failed: {fb['error']}")
                         else:
-                            st.warning("Vignette too short for feedback")
+                            st.warning("Vignette too short for feedback (minimum 50 words)")
                     else:
                         st.error("Beta reader not available")
         
@@ -2010,6 +2009,14 @@ def show_vignette_detail():
             st.markdown("---")
             st.markdown("### 📋 Beta Reader Results")
             
+            # Show what profile information was used
+            if fb.get('profile_sections_used'):
+                with st.expander("📋 **PROFILE INFORMATION ACCESSED**", expanded=True):
+                    st.markdown("The Beta Reader used these profile sections to personalize this feedback:")
+                    cols = st.columns(3)
+                    for i, section in enumerate(fb['profile_sections_used']):
+                        cols[i % 3].markdown(f"✅ **{section}**")
+            
             if st.button("💾 Save to History", key=f"save_vignette_fb_{vignette['id']}"):
                 if save_vignette_beta_feedback(st.session_state.user_id, vignette['id'], fb, vignette['title']):
                     st.success("✅ Saved!")
@@ -2017,8 +2024,17 @@ def show_vignette_detail():
             
             st.markdown("---")
             
+            # Display feedback with profile highlights
             if 'feedback' in fb and fb['feedback']:
-                st.markdown(fb['feedback'])
+                feedback_text = fb['feedback']
+                parts = re.split(r'(\[PROFILE:.*?\])', feedback_text)
+                formatted_feedback = ""
+                for part in parts:
+                    if part.startswith('[PROFILE:') and part.endswith(']'):
+                        formatted_feedback += f'<span style="background-color: #e8f4fd; color: #0366d6; font-weight: bold; padding: 2px 6px; border-radius: 4px; border-left: 3px solid #0366d6;">{part}</span>'
+                    else:
+                        formatted_feedback += part
+                st.markdown(formatted_feedback, unsafe_allow_html=True)
             else:
                 if 'summary' in fb:
                     st.info(fb['summary'])
