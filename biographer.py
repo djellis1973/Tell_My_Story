@@ -576,69 +576,6 @@ def show_privacy_settings():
     st.stop()
 
 # ============================================================================
-# COVER DESIGNER MODAL
-# ============================================================================
-def show_cover_designer():
-    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    st.title("🎨 Cover Designer")
-    
-    if st.button("← Back", key="cover_back"):
-        st.session_state.show_cover_designer = False
-        st.rerun()
-    
-    st.markdown("### Design your book cover")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**Cover Options**")
-        cover_type = st.selectbox("Cover Style", ["Simple", "Elegant", "Modern", "Classic", "Vintage"])
-        title_font = st.selectbox("Title Font", ["Georgia", "Arial", "Times New Roman", "Helvetica", "Calibri"])
-        title_color = st.color_picker("Title Color", "#000000")
-        background_color = st.color_picker("Background Color", "#FFFFFF")
-        
-        uploaded_cover = st.file_uploader("Upload Cover Image (optional)", type=['jpg', 'jpeg', 'png'])
-        if uploaded_cover:
-            st.image(uploaded_cover, caption="Your cover image", width=300)
-    
-    with col2:
-        st.markdown("**Preview**")
-        first_name = st.session_state.user_account.get('profile', {}).get('first_name', 'My')
-        preview_title = st.text_input("Preview Title", value=f"{first_name}'s Story")
-        
-        preview_style = f"""
-        <div class="cover-preview" style="background-color:{background_color};">
-            <h1 style="font-family:{title_font}; color:{title_color};">{preview_title}</h1>
-            <p>by {st.session_state.user_account.get('profile', {}).get('first_name', '')}</p>
-        </div>
-        """
-        st.markdown(preview_style, unsafe_allow_html=True)
-    
-    if st.button("💾 Save Cover Design", type="primary", width='stretch'):
-        if 'cover_design' not in st.session_state.user_account:
-            st.session_state.user_account['cover_design'] = {}
-        
-        st.session_state.user_account['cover_design'].update({
-            "cover_type": cover_type, "title_font": title_font, "title_color": title_color,
-            "background_color": background_color, "title": preview_title
-        })
-        
-        if uploaded_cover:
-            cover_path = f"uploads/covers/{st.session_state.user_id}_cover.jpg"
-            os.makedirs("uploads/covers", exist_ok=True)
-            with open(cover_path, 'wb') as f:
-                f.write(uploaded_cover.getbuffer())
-            st.session_state.user_account['cover_design']['cover_image'] = cover_path
-        
-        save_account_data(st.session_state.user_account)
-        st.success("Cover design saved!")
-        time.sleep(1)
-        st.rerun()
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
-
-# ============================================================================
 # NARRATIVE GPS HELPER FUNCTIONS
 # ============================================================================
 def get_narrative_gps_for_ai():
