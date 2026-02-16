@@ -2763,10 +2763,16 @@ with st.sidebar:
         if st.button("🔒 Privacy", width='stretch'):
             st.session_state.show_privacy_settings = True
             st.rerun()
-    with col2:
-        if st.button("🎨 Cover", width='stretch'):
-            st.session_state.show_cover_designer = True
-            st.rerun()
+if st.button("🎨 Cover", width='stretch'):
+    # Store the current data for the publisher
+    st.session_state.publisher_data = {
+        "stories_data": {
+            "user_profile": st.session_state.user_account.get('profile', {}),
+            "stories": []  # We'll populate this if needed
+        }
+    }
+    st.session_state.show_publisher = True
+    st.rerun()
     
     st.divider()
     st.header("📚 Question Banks")
