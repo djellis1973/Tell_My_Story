@@ -2757,6 +2757,35 @@ with st.sidebar:
 # ============================================================================
 # MAIN CONTENT AREA
 # ============================================================================
+# ============================================================================
+# MAIN CONTENT AREA - FIXED
+# ============================================================================
+
+# ADD THIS CHECK AT THE VERY TOP OF MAIN CONTENT AREA
+# Skip rendering main content if any modal is active
+if (st.session_state.show_vignette_modal or 
+    st.session_state.show_vignette_manager or 
+    st.session_state.show_vignette_detail or
+    st.session_state.show_topic_browser or 
+    st.session_state.show_session_manager or 
+    st.session_state.show_session_creator or
+    st.session_state.show_bank_manager or 
+    st.session_state.show_bank_editor or
+    st.session_state.show_privacy_settings or
+    st.session_state.show_cover_designer or
+    st.session_state.show_profile_setup or
+    st.session_state.show_ai_suggestions):
+    
+    # Still show the main header but don't render the Q&A section
+    st.markdown(f'<div class="main-header"><img src="{LOGO_URL}" class="logo-img"></div>', unsafe_allow_html=True)
+    st.stop()  # This stops execution here, preventing the Q&A section from rendering
+
+# Original main content continues below this point
+if st.session_state.current_session >= len(SESSIONS): 
+    st.session_state.current_session = 0
+
+current_session = SESSIONS[st.session_state.current_session]
+current_session_id = current_session["id"]
 if st.session_state.current_session >= len(SESSIONS): 
     st.session_state.current_session = 0
 
