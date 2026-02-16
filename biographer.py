@@ -1726,7 +1726,7 @@ def display_saved_feedback(user_id, session_id):
                     st.markdown(f"💡 {sug}")
 
 # ============================================================================
-# FIXED: display_beta_feedback function with proper styling
+# FIXED: display_beta_feedback function with proper styling and profile highlighting
 # ============================================================================
 def display_beta_feedback(feedback_data):
     """Display beta feedback in a styled container below the answer box"""
@@ -1749,6 +1749,15 @@ def display_beta_feedback(feedback_data):
             st.error(f"Error: {feedback_data['error']}")
             return
         
+        # Show what profile information was used
+        if feedback_data.get('profile_sections_used'):
+            with st.expander("📋 **PROFILE INFORMATION ACCESSED**", expanded=True):
+                st.markdown("The Beta Reader used these profile sections to personalize this feedback:")
+                cols = st.columns(3)
+                for i, section in enumerate(feedback_data['profile_sections_used']):
+                    cols[i % 3].markdown(f"✅ **{section}**")
+                st.markdown("\n*Look for highlighted **[PROFILE: ...]** markers in the feedback below to see where specific profile information influenced the analysis.*")
+        
         col_save1, col_save2, col_save3 = st.columns([1, 2, 1])
         with col_save2:
             if st.button("💾 Save This Feedback to History", key="save_beta_feedback", type="primary", use_container_width=True):
@@ -1767,7 +1776,20 @@ def display_beta_feedback(feedback_data):
         st.markdown("---")
         
         if 'feedback' in feedback_data and feedback_data['feedback']:
-            st.markdown(feedback_data['feedback'])
+            # Process the feedback to highlight profile markers
+            feedback_text = feedback_data['feedback']
+            
+            # Split into sections and highlight profile markers
+            parts = re.split(r'(\[PROFILE:.*?\])', feedback_text)
+            formatted_feedback = ""
+            for i, part in enumerate(parts):
+                if part.startswith('[PROFILE:') and part.endswith(']'):
+                    # This is a profile marker - make it stand out
+                    formatted_feedback += f'<span style="background-color: #e8f4fd; color: #0366d6; font-weight: bold; padding: 2px 6px; border-radius: 4px; border-left: 3px solid #0366d6;">{part}</span>'
+                else:
+                    formatted_feedback += part
+            
+            st.markdown(formatted_feedback, unsafe_allow_html=True)
         else:
             if 'summary' in feedback_data and feedback_data['summary']:
                 st.markdown("**Summary:**")
