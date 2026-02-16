@@ -21,6 +21,7 @@ from docx.shared import Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from fpdf import FPDF
 import zipfile
+import biography_publisher
 
 # ============================================================================
 # IMPORT QUILL RICH TEXT EDITOR
@@ -3064,6 +3065,13 @@ if st.session_state.logged_in:
     init_image_handler()
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
+# ============================================================================
+# PUBLISHER PAGE
+# ============================================================================
+if st.session_state.get('show_publisher', False):
+    biography_publisher.main()
+    st.stop()
+    
 # ============================================================================
 # QUILL EDITOR - COMPLETE FIXED VERSION (NO AUTO-RERUN)
 # ============================================================================
