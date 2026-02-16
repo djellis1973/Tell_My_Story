@@ -1938,27 +1938,118 @@ def show_vignette_manager():
 
 def show_vignette_detail():
     if not VignetteManager or not st.session_state.get('selected_vignette_id'): 
-        st.session_state.show_vignette_detail = False; 
+        st.session_state.show_vignette_detail = False
         return
+    
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("←", key="vign_detail_back"): 
-        st.session_state.show_vignette_detail = False; 
-        st.session_state.selected_vignette_id = None; 
-        st.rerun()
-    st.title("📖 Read Vignette")
+    
+    col1, col2 = st.columns([6, 1])
+    with col1:
+        st.title("📖 Read Vignette")
+    with col2:
+        if st.button("✕", key="close_vignette_detail"):
+            st.session_state.show_vignette_detail = False
+            st.session_state.selected_vignette_id = None
+            st.rerun()
+    
     if 'vignette_manager' not in st.session_state: 
         st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+    
     vignette = st.session_state.vignette_manager.get_vignette_by_id(st.session_state.selected_vignette_id)
     if not vignette: 
-        st.error("Not found"); 
-        st.session_state.show_vignette_detail = False; 
+        st.error("Vignette not found")
+        st.session_state.show_vignette_detail = False
         return
+    
+    # Display the vignette
     st.session_state.vignette_manager.display_full_vignette(
         st.session_state.selected_vignette_id,
         on_back=lambda: st.session_state.update(show_vignette_detail=False, selected_vignette_id=None),
         on_edit=on_vignette_edit
     )
+    
+    st.divider()
+    
+    # Beta Reader section
+    st.markdown("## 🦋 Beta Reader Feedback for This Vignette")
+    
+    tab1, tab2 = st.tabs(["📝 Get Feedback", "📚 Feedback History"])
+    
+    with tab1:
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            fb_type = st.selectbox(
+                "Feedback Type", 
+                ["comprehensive", "concise", "developmental"], 
+                key=f"beta_vignette_type_{vignette['id']}"
+            )
+        with col2:
+            if st.button("🦋 Get Beta Read", key=f"beta_vignette_btn_{vignette['id']}", type="primary", use_container_width=True):
+                with st.spinner("Beta Reader is analyzing your vignette..."):
+                    if beta_reader:
+                        vignette_text = vignette.get('content', '')
+                        if vignette_text and len(vignette_text.strip()) > 50:
+                            session_text = f"Vignette Title: {vignette['title']}\n\nContent:\n{vignette_text}"
+                            fb = generate_beta_reader_feedback(
+                                f"Vignette: {vignette['title']}", 
+                                session_text, 
+                                fb_type
+                            )
+                            if "error" not in fb: 
+                                st.session_state[f"beta_vignette_{vignette['id']}"] = fb
+                                st.rerun()
+                            else: 
+                                st.error(f"Failed: {fb['error']}")
+                        else:
+                            st.warning("Vignette too short for feedback")
+                    else:
+                        st.error("Beta reader not available")
+        
+        if f"beta_vignette_{vignette['id']}" in st.session_state:
+            fb = st.session_state[f"beta_vignette_{vignette['id']}"]
+            st.markdown("---")
+            st.markdown("### 📋 Beta Reader Results")
+            
+            if st.button("💾 Save to History", key=f"save_vignette_fb_{vignette['id']}"):
+                if save_vignette_beta_feedback(st.session_state.user_id, vignette['id'], fb, vignette['title']):
+                    st.success("✅ Saved!")
+                    st.rerun()
+            
+            st.markdown("---")
+            
+            if 'feedback' in fb and fb['feedback']:
+                st.markdown(fb['feedback'])
+            else:
+                if 'summary' in fb:
+                    st.info(fb['summary'])
+                if 'strengths' in fb:
+                    for s in fb['strengths']:
+                        st.markdown(f"✅ {s}")
+                if 'areas_for_improvement' in fb:
+                    for a in fb['areas_for_improvement']:
+                        st.markdown(f"📝 {a}")
+    
+    with tab2:
+        st.markdown("### Saved Feedback")
+        user_data = load_user_data(st.session_state.user_id) if st.session_state.user_id else {}
+        vignette_feedback = user_data.get("vignette_beta_feedback", {})
+        this_vignette_feedback = vignette_feedback.get(str(vignette['id']), [])
+        
+        if not this_vignette_feedback:
+            st.info("No saved feedback yet")
+        else:
+            for i, fb in enumerate(this_vignette_feedback):
+                with st.expander(f"Feedback {i+1}"):
+                    if st.button(f"Delete", key=f"del_vignette_fb_{i}"):
+                        this_vignette_feedback.pop(i)
+                        user_data["vignette_beta_feedback"] = vignette_feedback
+                        save_user_data(st.session_state.user_id, user_data.get("responses", {}))
+                        st.rerun()
+                    if 'feedback' in fb:
+                        st.markdown(fb['feedback'])
+    
     st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
 
 def switch_to_vignette(vignette_topic, content=""):
     st.session_state.current_question_override = f"Vignette: {vignette_topic}"
