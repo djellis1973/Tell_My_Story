@@ -576,155 +576,452 @@ def show_privacy_settings():
     st.stop()
 
 # ============================================================================
-# FIXED COVER DESIGNER MODAL - Larger preview with proper image display
+# FIXED COVER DESIGNER MODAL - Portrait orientation with all book cover elements
 # ============================================================================
 def show_cover_designer():
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    st.title("🎨 Cover Designer")
+    st.title("🎨 Book Cover Designer")
     
     if st.button("← Back", key="cover_back"):
         st.session_state.show_cover_designer = False
         st.rerun()
     
-    st.markdown("### Design your book cover")
+    st.markdown("### Design your book cover - Portrait format (6\" x 9\")")
     
-    col1, col2 = st.columns([1, 1])  # Equal columns for better balance
+    # Book dimensions for published books
+    book_dimensions = {
+        "width": 600,  # pixels at 100 DPI (6 inches)
+        "height": 900,  # pixels at 100 DPI (9 inches)
+        "aspect_ratio": 1.5  # 9:6 = 1.5
+    }
+    
+    # Load existing cover design if it exists
+    existing_design = st.session_state.user_account.get('cover_design', {})
+    
+    col1, col2 = st.columns([1, 1.2])  # Slightly larger preview column
     
     with col1:
-        st.markdown("**Cover Options**")
-        cover_type = st.selectbox("Cover Style", ["Simple", "Elegant", "Modern", "Classic", "Vintage"])
-        title_font = st.selectbox("Title Font", ["Georgia", "Arial", "Times New Roman", "Helvetica", "Calibri"])
-        title_color = st.color_picker("Title Color", "#000000")
-        background_color = st.color_picker("Background Color", "#FFFFFF")
+        st.markdown("**Cover Elements**")
         
-        uploaded_cover = st.file_uploader("Upload Cover Image (optional)", type=['jpg', 'jpeg', 'png'])
+        # Book Title
+        st.markdown("📚 **Title**")
+        title = st.text_input(
+            "Book Title",
+            value=existing_design.get('title', f"{st.session_state.user_account.get('profile', {}).get('first_name', 'My')}'s Story"),
+            key="cover_title",
+            placeholder="Enter your book title"
+        )
         
-        # Show uploaded image in the options column as well
-        if uploaded_cover:
-            st.image(uploaded_cover, caption="Your uploaded image", width=250)
+        # Subtitle
+        st.markdown("📖 **Subtitle (optional)**")
+        subtitle = st.text_input(
+            "Subtitle",
+            value=existing_design.get('subtitle', ''),
+            key="cover_subtitle",
+            placeholder="A brief explanation or tagline"
+        )
+        
+        # Author Name
+        st.markdown("✍️ **Author Name**")
+        author_name = st.text_input(
+            "Author Name",
+            value=existing_design.get('author_name', f"{st.session_state.user_account.get('profile', {}).get('first_name', '')} {st.session_state.user_account.get('profile', {}).get('last_name', '')}".strip()),
+            key="cover_author",
+            placeholder="How should your name appear?"
+        )
+        
+        # Series Information
+        st.markdown("📚 **Series Information (optional)**")
+        col_series1, col_series2 = st.columns(2)
+        with col_series1:
+            series_name = st.text_input(
+                "Series Name",
+                value=existing_design.get('series_name', ''),
+                key="cover_series_name",
+                placeholder="e.g., The Legacy Series"
+            )
+        with col_series2:
+            series_number = st.text_input(
+                "Book Number",
+                value=existing_design.get('series_number', ''),
+                key="cover_series_number",
+                placeholder="e.g., Book 1"
+            )
+        
+        st.markdown("---")
+        
+        # Cover Art/Imagery
+        st.markdown("🖼️ **Cover Art/Imagery**")
+        uploaded_cover = st.file_uploader(
+            "Upload cover image (portrait orientation works best)", 
+            type=['jpg', 'jpeg', 'png'],
+            key="cover_upload"
+        )
+        
+        # Accolades/Blurbs
+        st.markdown("⭐ **Accolades/Blurbs (optional)**")
+        use_blurb = st.checkbox("Add a praise blurb", value=existing_design.get('use_blurb', False))
+        
+        if use_blurb:
+            blurb_text = st.text_area(
+                "Blurb text",
+                value=existing_design.get('blurb_text', ''),
+                placeholder="e.g., 'A captivating story...' — New York Times",
+                height=80,
+                key="cover_blurb"
+            )
+            blurb_position = st.selectbox(
+                "Blurb position",
+                ["Top", "Bottom"],
+                index=0 if existing_design.get('blurb_position', 'Top') == "Top" else 1,
+                key="cover_blurb_position"
+            )
+        else:
+            blurb_text = ""
+            blurb_position = "Top"
+        
+        st.markdown("---")
+        
+        # Design Settings
+        st.markdown("🎨 **Design Settings**")
+        
+        # Cover Style
+        cover_type = st.selectbox(
+            "Cover Style",
+            ["Simple", "Elegant", "Modern", "Classic", "Vintage"],
+            index=["Simple", "Elegant", "Modern", "Classic", "Vintage"].index(existing_design.get('cover_type', 'Simple')),
+            key="cover_type"
+        )
+        
+        # Font selections
+        st.markdown("**Typography**")
+        title_font = st.selectbox(
+            "Title Font",
+            ["Georgia", "Arial", "Times New Roman", "Helvetica", "Calibri", "Playfair Display", "Montserrat"],
+            index=["Georgia", "Arial", "Times New Roman", "Helvetica", "Calibri", "Playfair Display", "Montserrat"].index(existing_design.get('title_font', 'Georgia')),
+            key="title_font"
+        )
+        
+        # Colors
+        col_color1, col_color2 = st.columns(2)
+        with col_color1:
+            title_color = st.color_picker("Title Color", value=existing_design.get('title_color', '#000000'), key="title_color")
+        with col_color2:
+            text_color = st.color_picker("Text Color", value=existing_design.get('text_color', '#333333'), key="text_color")
+        
+        # Background
+        if not uploaded_cover:
+            background_color = st.color_picker("Background Color", value=existing_design.get('background_color', '#FFFFFF'), key="background_color")
+        else:
+            background_color = existing_design.get('background_color', '#FFFFFF')
+            st.info("Background color will be overridden by your cover image")
     
     with col2:
-        st.markdown("**Larger Preview**")
-        first_name = st.session_state.user_account.get('profile', {}).get('first_name', 'My')
-        preview_title = st.text_input("Preview Title", value=f"{first_name}'s Story")
+        st.markdown("**Live Book Cover Preview**")
+        st.markdown("*Preview shows approximate layout (6\" x 9\" portrait format)*")
         
-        # Create a much larger preview container
-        if uploaded_cover:
-            # If there's an uploaded image, use it as the background
-            st.markdown(f"""
-            <div style="
-                width: 100%;
-                min-height: 400px;
-                border: 2px solid #ddd;
-                border-radius: 10px;
-                overflow: hidden;
-                position: relative;
-                margin-top: 10px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            ">
-                <img src="data:image/jpeg;base64,{base64.b64encode(uploaded_cover.getvalue()).decode()}" 
-                     style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;">
-                <div style="
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0,0,0,0.3);
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: center;
-                    align-items: center;
-                    text-align: center;
-                    padding: 20px;
-                ">
-                    <h1 style="
-                        font-family: {title_font};
-                        color: {title_color};
-                        font-size: 48px;
-                        margin-bottom: 10px;
-                        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-                    ">{preview_title}</h1>
-                    <p style="
-                        font-family: {title_font};
-                        color: {title_color};
-                        font-size: 24px;
-                        opacity: 0.9;
-                        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-                    ">by {st.session_state.user_account.get('profile', {}).get('first_name', '')}</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            # If no image, use solid color background
-            preview_style = f"""
-            <div style="
-                width: 100%;
-                min-height: 400px;
-                background-color: {background_color};
-                border: 2px solid #ddd;
-                border-radius: 10px;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                text-align: center;
-                padding: 20px;
-                margin-top: 10px;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            ">
-                <h1 style="
-                    font-family: {title_font};
-                    color: {title_color};
-                    font-size: 48px;
-                    margin-bottom: 10px;
-                ">{preview_title}</h1>
-                <p style="
-                    font-family: {title_font};
-                    color: {title_color};
-                    font-size: 24px;
-                ">by {st.session_state.user_account.get('profile', {}).get('first_name', '')}</p>
-            </div>
-            """
-            st.markdown(preview_style, unsafe_allow_html=True)
+        # Generate the preview HTML with proper portrait dimensions
+        preview_html = generate_cover_preview(
+            title=title,
+            subtitle=subtitle,
+            author_name=author_name,
+            series_name=series_name if series_name else None,
+            series_number=series_number if series_number else None,
+            uploaded_image=uploaded_cover,
+            use_blurb=use_blurb,
+            blurb_text=blurb_text if use_blurb else None,
+            blurb_position=blurb_position if use_blurb else None,
+            title_font=title_font,
+            title_color=title_color,
+            text_color=text_color,
+            background_color=background_color if not uploaded_cover else None,
+            cover_type=cover_type,
+            dimensions=book_dimensions
+        )
+        
+        st.markdown(preview_html, unsafe_allow_html=True)
+        
+        # Add dimension info
+        st.caption(f"📐 Portrait format: 6\" wide × 9\" tall (shown at {book_dimensions['width']}px × {book_dimensions['height']}px)")
     
-    # Add some spacing
+    # Save button
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # Save button centered and full width
-    if st.button("💾 Save Cover Design", type="primary", use_container_width=True):
-        if 'cover_design' not in st.session_state.user_account:
-            st.session_state.user_account['cover_design'] = {}
-        
-        st.session_state.user_account['cover_design'].update({
-            "cover_type": cover_type,
-            "title_font": title_font,
-            "title_color": title_color,
-            "background_color": background_color,
-            "title": preview_title
-        })
-        
-        if uploaded_cover:
-            # Save the uploaded image
-            cover_path = f"uploads/covers/{st.session_state.user_id}_cover.jpg"
-            os.makedirs("uploads/covers", exist_ok=True)
-            
-            # Read and save the image
-            img_data = uploaded_cover.getvalue()
-            with open(cover_path, 'wb') as f:
-                f.write(img_data)
-            
-            # Also save a base64 version in the account data for quick preview
-            st.session_state.user_account['cover_design']['cover_image_base64'] = base64.b64encode(img_data).decode()
-            st.session_state.user_account['cover_design']['cover_image'] = cover_path
-        
-        save_account_data(st.session_state.user_account)
-        st.success("✅ Cover design saved!")
-        time.sleep(1)
-        st.rerun()
+    col_save1, col_save2, col_save3 = st.columns([1, 2, 1])
+    with col_save2:
+        if st.button("💾 Save Cover Design", type="primary", use_container_width=True):
+            save_cover_design(
+                title=title,
+                subtitle=subtitle,
+                author_name=author_name,
+                series_name=series_name,
+                series_number=series_number,
+                uploaded_cover=uploaded_cover,
+                use_blurb=use_blurb,
+                blurb_text=blurb_text if use_blurb else None,
+                blurb_position=blurb_position if use_blurb else None,
+                cover_type=cover_type,
+                title_font=title_font,
+                title_color=title_color,
+                text_color=text_color,
+                background_color=background_color if not uploaded_cover else None
+            )
     
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
+
+
+def generate_cover_preview(title, subtitle=None, author_name=None, series_name=None, 
+                          series_number=None, uploaded_image=None, use_blurb=False,
+                          blurb_text=None, blurb_position="Top", title_font="Georgia",
+                          title_color="#000000", text_color="#333333", background_color="#FFFFFF",
+                          cover_type="Simple", dimensions=None):
+    """Generate HTML for cover preview with proper portrait orientation"""
+    
+    if dimensions is None:
+        dimensions = {"width": 600, "height": 900}
+    
+    # Handle uploaded image
+    image_html = ""
+    if uploaded_image:
+        img_base64 = base64.b64encode(uploaded_image.getvalue()).decode()
+        image_html = f'''
+            <img src="data:image/jpeg;base64,{img_base64}" 
+                 style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;">
+            <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+                        background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.4) 100%);">
+            </div>
+        '''
+        bg_color_style = ""
+    else:
+        image_html = ""
+        bg_color_style = f"background-color: {background_color};"
+    
+    # Determine layout based on cover type
+    if cover_type == "Simple":
+        title_size = "48px"
+        author_size = "24px"
+        padding = "20px"
+    elif cover_type == "Elegant":
+        title_size = "52px"
+        author_size = "26px"
+        padding = "30px"
+    elif cover_type == "Modern":
+        title_size = "44px"
+        author_size = "22px"
+        padding = "25px"
+    elif cover_type == "Classic":
+        title_size = "56px"
+        author_size = "28px"
+        padding = "35px"
+    else:  # Vintage
+        title_size = "46px"
+        author_size = "23px"
+        padding = "25px"
+    
+    # Build the preview HTML
+    preview_html = f'''
+    <div style="
+        width: 100%;
+        max-width: {dimensions['width']}px;
+        margin: 0 auto;
+        position: relative;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        aspect-ratio: {dimensions['width']} / {dimensions['height']};
+    ">
+        <!-- Background -->
+        <div style="
+            width: 100%;
+            height: 100%;
+            {bg_color_style}
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: {padding};
+            box-sizing: border-box;
+            font-family: {title_font}, serif;
+        ">
+            {image_html}
+            
+            <!-- Content overlay -->
+            <div style="position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column;">
+    '''
+    
+    # Top section (for blurbs or series info)
+    preview_html += '<div style="flex: 0 0 auto; text-align: center;">'
+    
+    # Series info at top if exists
+    if series_name and series_number:
+        preview_html += f'''
+            <div style="
+                font-family: {title_font}, serif;
+                color: {text_color if not uploaded_image else '#ffffff'};
+                font-size: 18px;
+                letter-spacing: 2px;
+                margin-bottom: 10px;
+                text-transform: uppercase;
+                text-shadow: {('1px 1px 2px rgba(0,0,0,0.5)' if uploaded_image else 'none')};
+            ">
+                {series_name} • {series_number}
+            </div>
+        '''
+    elif series_name:
+        preview_html += f'''
+            <div style="
+                font-family: {title_font}, serif;
+                color: {text_color if not uploaded_image else '#ffffff'};
+                font-size: 18px;
+                letter-spacing: 2px;
+                margin-bottom: 10px;
+                text-transform: uppercase;
+                text-shadow: {('1px 1px 2px rgba(0,0,0,0.5)' if uploaded_image else 'none')};
+            ">
+                {series_name}
+            </div>
+        '''
+    
+    # Blurb at top if selected
+    if use_blurb and blurb_text and blurb_position == "Top":
+        preview_html += f'''
+            <div style="
+                font-family: {title_font}, serif;
+                color: {text_color if not uploaded_image else '#ffffff'};
+                font-size: 16px;
+                font-style: italic;
+                margin: 10px 0;
+                padding: 10px;
+                border-left: 3px solid {title_color};
+                text-shadow: {('1px 1px 2px rgba(0,0,0,0.5)' if uploaded_image else 'none')};
+                background: {('rgba(0,0,0,0.3)' if uploaded_image else 'rgba(255,255,255,0.8)')};
+                border-radius: 4px;
+            ">
+                "{blurb_text}"
+            </div>
+        '''
+    
+    preview_html += '</div>'  # Close top section
+    
+    # Middle section - Title and subtitle
+    preview_html += f'''
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center;">
+            <h1 style="
+                font-family: {title_font}, serif;
+                color: {title_color if not uploaded_image else '#ffffff'};
+                font-size: {title_size};
+                font-weight: bold;
+                margin: 0 0 10px 0;
+                line-height: 1.2;
+                text-shadow: {('2px 2px 4px rgba(0,0,0,0.5)' if uploaded_image else 'none')};
+            ">{title}</h1>
+    '''
+    
+    if subtitle:
+        preview_html += f'''
+            <h2 style="
+                font-family: {title_font}, serif;
+                color: {text_color if not uploaded_image else '#ffffff'};
+                font-size: 24px;
+                font-weight: normal;
+                margin: 0 0 20px 0;
+                text-shadow: {('1px 1px 2px rgba(0,0,0,0.5)' if uploaded_image else 'none')};
+            ">{subtitle}</h2>
+        '''
+    
+    preview_html += '</div>'  # Close middle section
+    
+    # Bottom section - Author and blurbs
+    preview_html += '<div style="flex: 0 0 auto; text-align: center;">'
+    
+    # Author name
+    if author_name:
+        preview_html += f'''
+            <div style="
+                font-family: {title_font}, serif;
+                color: {text_color if not uploaded_image else '#ffffff'};
+                font-size: {author_size};
+                margin: 10px 0;
+                text-shadow: {('1px 1px 2px rgba(0,0,0,0.5)' if uploaded_image else 'none')};
+            ">
+                by {author_name}
+            </div>
+        '''
+    
+    # Blurb at bottom if selected
+    if use_blurb and blurb_text and blurb_position == "Bottom":
+        preview_html += f'''
+            <div style="
+                font-family: {title_font}, serif;
+                color: {text_color if not uploaded_image else '#ffffff'};
+                font-size: 16px;
+                font-style: italic;
+                margin-top: 10px;
+                padding: 10px;
+                border-right: 3px solid {title_color};
+                text-shadow: {('1px 1px 2px rgba(0,0,0,0.5)' if uploaded_image else 'none')};
+                background: {('rgba(0,0,0,0.3)' if uploaded_image else 'rgba(255,255,255,0.8)')};
+                border-radius: 4px;
+            ">
+                "{blurb_text}"
+            </div>
+        '''
+    
+    preview_html += '''
+            </div>
+        </div>
+    </div>
+    '''
+    
+    return preview_html
+
+
+def save_cover_design(title, subtitle, author_name, series_name, series_number, 
+                     uploaded_cover, use_blurb, blurb_text, blurb_position,
+                     cover_type, title_font, title_color, text_color, background_color):
+    """Save the cover design to user account"""
+    
+    if 'cover_design' not in st.session_state.user_account:
+        st.session_state.user_account['cover_design'] = {}
+    
+    # Update with all the new fields
+    st.session_state.user_account['cover_design'].update({
+        "title": title,
+        "subtitle": subtitle,
+        "author_name": author_name,
+        "series_name": series_name,
+        "series_number": series_number,
+        "use_blurb": use_blurb,
+        "blurb_text": blurb_text,
+        "blurb_position": blurb_position,
+        "cover_type": cover_type,
+        "title_font": title_font,
+        "title_color": title_color,
+        "text_color": text_color,
+        "background_color": background_color,
+        "last_updated": datetime.now().isoformat()
+    })
+    
+    if uploaded_cover:
+        # Save the uploaded image
+        cover_path = f"uploads/covers/{st.session_state.user_id}_cover.jpg"
+        os.makedirs("uploads/covers", exist_ok=True)
+        
+        # Read and save the image
+        img_data = uploaded_cover.getvalue()
+        with open(cover_path, 'wb') as f:
+            f.write(img_data)
+        
+        # Also save a base64 version in the account data for quick preview
+        st.session_state.user_account['cover_design']['cover_image_base64'] = base64.b64encode(img_data).decode()
+        st.session_state.user_account['cover_design']['cover_image'] = cover_path
+    
+    save_account_data(st.session_state.user_account)
+    st.success("✅ Cover design saved with portrait format!")
+    time.sleep(1)
+    st.rerun()
 
 # ============================================================================
 # NARRATIVE GPS HELPER FUNCTIONS
