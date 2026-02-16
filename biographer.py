@@ -1726,6 +1726,56 @@ def display_saved_feedback(user_id, session_id):
                     st.markdown(f"💡 {sug}")
 
 # ============================================================================
+# NEW: Save vignette beta feedback - ADD IT HERE, RIGHT BELOW save_beta_feedback
+# ============================================================================
+def save_vignette_beta_feedback(user_id, vignette_id, feedback_data, vignette_title):
+    if not user_id:
+        return False
+    
+    try:
+        # Get the filename for this user
+        filename = get_user_filename(user_id)
+        
+        # Load existing data
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                user_data = json.load(f)
+        else:
+            user_data = {"responses": {}, "vignettes": [], "beta_feedback": {}, "vignette_beta_feedback": {}}
+        
+        # Initialize vignette_beta_feedback if it doesn't exist
+        if "vignette_beta_feedback" not in user_data:
+            user_data["vignette_beta_feedback"] = {}
+        
+        # Convert vignette_id to string
+        vignette_key = str(vignette_id)
+        
+        # Initialize list for this vignette if it doesn't exist
+        if vignette_key not in user_data["vignette_beta_feedback"]:
+            user_data["vignette_beta_feedback"][vignette_key] = []
+        
+        # Add metadata to feedback
+        feedback_copy = feedback_data.copy()
+        if "generated_at" not in feedback_copy:
+            feedback_copy["generated_at"] = datetime.now().isoformat()
+        if "feedback_type" not in feedback_copy:
+            feedback_copy["feedback_type"] = "comprehensive"
+        
+        # Add vignette title
+        feedback_copy["vignette_title"] = vignette_title
+        
+        # Append feedback
+        user_data["vignette_beta_feedback"][vignette_key].append(feedback_copy)
+        
+        # Write back to file
+        with open(filename, 'w') as f:
+            json.dump(user_data, f, indent=2)
+        
+        return True
+    except Exception as e:
+        print(f"Error saving vignette feedback: {e}")
+        return False
+# ============================================================================
 # FIXED: display_beta_feedback function with proper styling and profile highlighting
 # ============================================================================
 def display_beta_feedback(feedback_data):
