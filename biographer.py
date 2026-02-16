@@ -1726,56 +1726,6 @@ def display_saved_feedback(user_id, session_id):
                     st.markdown(f"💡 {sug}")
 
 # ============================================================================
-# NEW: Save vignette beta feedback - ADD IT HERE, RIGHT BELOW save_beta_feedback
-# ============================================================================
-def save_vignette_beta_feedback(user_id, vignette_id, feedback_data, vignette_title):
-    if not user_id:
-        return False
-    
-    try:
-        # Get the filename for this user
-        filename = get_user_filename(user_id)
-        
-        # Load existing data
-        if os.path.exists(filename):
-            with open(filename, 'r') as f:
-                user_data = json.load(f)
-        else:
-            user_data = {"responses": {}, "vignettes": [], "beta_feedback": {}, "vignette_beta_feedback": {}}
-        
-        # Initialize vignette_beta_feedback if it doesn't exist
-        if "vignette_beta_feedback" not in user_data:
-            user_data["vignette_beta_feedback"] = {}
-        
-        # Convert vignette_id to string
-        vignette_key = str(vignette_id)
-        
-        # Initialize list for this vignette if it doesn't exist
-        if vignette_key not in user_data["vignette_beta_feedback"]:
-            user_data["vignette_beta_feedback"][vignette_key] = []
-        
-        # Add metadata to feedback
-        feedback_copy = feedback_data.copy()
-        if "generated_at" not in feedback_copy:
-            feedback_copy["generated_at"] = datetime.now().isoformat()
-        if "feedback_type" not in feedback_copy:
-            feedback_copy["feedback_type"] = "comprehensive"
-        
-        # Add vignette title
-        feedback_copy["vignette_title"] = vignette_title
-        
-        # Append feedback
-        user_data["vignette_beta_feedback"][vignette_key].append(feedback_copy)
-        
-        # Write back to file
-        with open(filename, 'w') as f:
-            json.dump(user_data, f, indent=2)
-        
-        return True
-    except Exception as e:
-        print(f"Error saving vignette feedback: {e}")
-        return False
-# ============================================================================
 # FIXED: display_beta_feedback function with proper styling and profile highlighting
 # ============================================================================
 def display_beta_feedback(feedback_data):
@@ -1906,40 +1856,70 @@ def show_vignette_modal():
         st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
     edit = st.session_state.vignette_manager.get_vignette_by_id(st.session_state.editing_vignette_id) if st.session_state.get('editing_vignette_id') else None
     st.session_state.vignette_manager.display_vignette_creator(on_publish=on_vignette_publish, edit_vignette=edit)
-    
-    # ===== ADD THIS BLOCK =====
-    # Show Beta Reader below the edit form if we're editing
-    if edit:
-        st.divider()
-        st.markdown("## 🦋 Beta Reader Feedback")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            fb_type = st.selectbox("Feedback Type", ["comprehensive", "concise", "developmental"], key=f"beta_edit_{edit['id']}")
-        with col2:
-            if st.button("Get Feedback", key=f"beta_btn_{edit['id']}", type="primary"):
-                with st.spinner("Analyzing..."):
-                    if beta_reader and edit.get('content'):
-                        session_text = f"Vignette: {edit['title']}\n\n{edit['content']}"
-                        fb = generate_beta_reader_feedback(edit['title'], session_text, fb_type)
-                        if "error" not in fb:
-                            st.session_state[f"beta_result_{edit['id']}"] = fb
-                            st.rerun()
-        
-        if f"beta_result_{edit['id']}" in st.session_state:
-            fb = st.session_state[f"beta_result_{edit['id']}"]
-            st.markdown("---")
-            if 'feedback' in fb:
-                st.markdown(fb['feedback'])
-            else:
-                if 'summary' in fb: st.info(fb['summary'])
-                if 'strengths' in fb: 
-                    for s in fb['strengths']: st.markdown(f"✅ {s}")
-                if 'areas_for_improvement' in fb:
-                    for a in fb['areas_for_improvement']: st.markdown(f"📝 {a}")
-    # ===== END OF ADDED BLOCK =====
-    
     st.markdown('</div>', unsafe_allow_html=True)
+
+def show_vignette_manager():
+    if not VignetteManager: 
+        st.error("Vignette module not available"); 
+        st.session_state.show_vignette_manager = False; 
+        return
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    if st.button("←", key="vign_mgr_back"): 
+        st.session_state.show_vignette_manager = False; 
+        st.rerun()
+    st.title("📚 Your Vignettes")
+    if 'vignette_manager' not in st.session_state: 
+        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+    filter_map = {"All Stories": "all", "Published": "published", "Drafts": "drafts"}
+    filter_option = st.radio("Show:", ["All Stories", "Published", "Drafts"], horizontal=True, key="vign_filter")
+    st.session_state.vignette_manager.display_vignette_gallery(
+        filter_by=filter_map.get(filter_option, "all"),
+        on_select=on_vignette_select, 
+        on_edit=on_vignette_edit, 
+        on_delete=on_vignette_delete
+    )
+    st.divider()
+    if st.button("➕ Create New Vignette", type="primary", width='stretch'):
+        st.session_state.show_vignette_manager = False; 
+        st.session_state.show_vignette_modal = True; 
+        st.session_state.editing_vignette_id = None; 
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def show_vignette_detail():
+    if not VignetteManager or not st.session_state.get('selected_vignette_id'): 
+        st.session_state.show_vignette_detail = False; 
+        return
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    if st.button("←", key="vign_detail_back"): 
+        st.session_state.show_vignette_detail = False; 
+        st.session_state.selected_vignette_id = None; 
+        st.rerun()
+    st.title("📖 Read Vignette")
+    if 'vignette_manager' not in st.session_state: 
+        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+    vignette = st.session_state.vignette_manager.get_vignette_by_id(st.session_state.selected_vignette_id)
+    if not vignette: 
+        st.error("Not found"); 
+        st.session_state.show_vignette_detail = False; 
+        return
+    st.session_state.vignette_manager.display_full_vignette(
+        st.session_state.selected_vignette_id,
+        on_back=lambda: st.session_state.update(show_vignette_detail=False, selected_vignette_id=None),
+        on_edit=on_vignette_edit
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def switch_to_vignette(vignette_topic, content=""):
+    st.session_state.current_question_override = f"Vignette: {vignette_topic}"
+    if content:
+        save_response(st.session_state.current_question_bank[st.session_state.current_session]["id"], 
+                     f"Vignette: {vignette_topic}", content)
+    st.rerun()
+
+def switch_to_custom_topic(topic_text):
+    st.session_state.current_question_override = topic_text
+    st.rerun()
 
 # ============================================================================
 # TOPIC BROWSER & SESSION MANAGER
@@ -3237,4 +3217,6 @@ if st.session_state.user_account:
     st.caption(f"Tell My Story Timeline • 👤 {profile['first_name']} {profile['last_name']} • 📅 Account Age: {age} days • 📚 Bank: {st.session_state.get('current_bank_name', 'None')}")
 else: 
     st.caption(f"Tell My Story Timeline • User: {st.session_state.user_id}")
+
+
 
