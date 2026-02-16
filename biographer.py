@@ -576,7 +576,7 @@ def show_privacy_settings():
     st.stop()
 
 # ============================================================================
-# COVER DESIGNER MODAL
+# FIXED COVER DESIGNER MODAL - Larger preview with proper image display
 # ============================================================================
 def show_cover_designer():
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
@@ -588,7 +588,7 @@ def show_cover_designer():
     
     st.markdown("### Design your book cover")
     
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1, 1])  # Equal columns for better balance
     
     with col1:
         st.markdown("**Cover Options**")
@@ -598,40 +598,128 @@ def show_cover_designer():
         background_color = st.color_picker("Background Color", "#FFFFFF")
         
         uploaded_cover = st.file_uploader("Upload Cover Image (optional)", type=['jpg', 'jpeg', 'png'])
+        
+        # Show uploaded image in the options column as well
         if uploaded_cover:
-            st.image(uploaded_cover, caption="Your cover image", width=300)
+            st.image(uploaded_cover, caption="Your uploaded image", width=250)
     
     with col2:
-        st.markdown("**Preview**")
+        st.markdown("**Larger Preview**")
         first_name = st.session_state.user_account.get('profile', {}).get('first_name', 'My')
         preview_title = st.text_input("Preview Title", value=f"{first_name}'s Story")
         
-        preview_style = f"""
-        <div class="cover-preview" style="background-color:{background_color};">
-            <h1 style="font-family:{title_font}; color:{title_color};">{preview_title}</h1>
-            <p>by {st.session_state.user_account.get('profile', {}).get('first_name', '')}</p>
-        </div>
-        """
-        st.markdown(preview_style, unsafe_allow_html=True)
+        # Create a much larger preview container
+        if uploaded_cover:
+            # If there's an uploaded image, use it as the background
+            st.markdown(f"""
+            <div style="
+                width: 100%;
+                min-height: 400px;
+                border: 2px solid #ddd;
+                border-radius: 10px;
+                overflow: hidden;
+                position: relative;
+                margin-top: 10px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            ">
+                <img src="data:image/jpeg;base64,{base64.b64encode(uploaded_cover.getvalue()).decode()}" 
+                     style="width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0;">
+                <div style="
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.3);
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    text-align: center;
+                    padding: 20px;
+                ">
+                    <h1 style="
+                        font-family: {title_font};
+                        color: {title_color};
+                        font-size: 48px;
+                        margin-bottom: 10px;
+                        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+                    ">{preview_title}</h1>
+                    <p style="
+                        font-family: {title_font};
+                        color: {title_color};
+                        font-size: 24px;
+                        opacity: 0.9;
+                        text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+                    ">by {st.session_state.user_account.get('profile', {}).get('first_name', '')}</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            # If no image, use solid color background
+            preview_style = f"""
+            <div style="
+                width: 100%;
+                min-height: 400px;
+                background-color: {background_color};
+                border: 2px solid #ddd;
+                border-radius: 10px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                text-align: center;
+                padding: 20px;
+                margin-top: 10px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            ">
+                <h1 style="
+                    font-family: {title_font};
+                    color: {title_color};
+                    font-size: 48px;
+                    margin-bottom: 10px;
+                ">{preview_title}</h1>
+                <p style="
+                    font-family: {title_font};
+                    color: {title_color};
+                    font-size: 24px;
+                ">by {st.session_state.user_account.get('profile', {}).get('first_name', '')}</p>
+            </div>
+            """
+            st.markdown(preview_style, unsafe_allow_html=True)
     
-    if st.button("💾 Save Cover Design", type="primary", width='stretch'):
+    # Add some spacing
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Save button centered and full width
+    if st.button("💾 Save Cover Design", type="primary", use_container_width=True):
         if 'cover_design' not in st.session_state.user_account:
             st.session_state.user_account['cover_design'] = {}
         
         st.session_state.user_account['cover_design'].update({
-            "cover_type": cover_type, "title_font": title_font, "title_color": title_color,
-            "background_color": background_color, "title": preview_title
+            "cover_type": cover_type,
+            "title_font": title_font,
+            "title_color": title_color,
+            "background_color": background_color,
+            "title": preview_title
         })
         
         if uploaded_cover:
+            # Save the uploaded image
             cover_path = f"uploads/covers/{st.session_state.user_id}_cover.jpg"
             os.makedirs("uploads/covers", exist_ok=True)
+            
+            # Read and save the image
+            img_data = uploaded_cover.getvalue()
             with open(cover_path, 'wb') as f:
-                f.write(uploaded_cover.getbuffer())
+                f.write(img_data)
+            
+            # Also save a base64 version in the account data for quick preview
+            st.session_state.user_account['cover_design']['cover_image_base64'] = base64.b64encode(img_data).decode()
             st.session_state.user_account['cover_design']['cover_image'] = cover_path
         
         save_account_data(st.session_state.user_account)
-        st.success("Cover design saved!")
+        st.success("✅ Cover design saved!")
         time.sleep(1)
         st.rerun()
     
