@@ -25,35 +25,48 @@ class BetaReader:
         
         return session_text
     
-    def generate_feedback(self, session_title, session_text, feedback_type="comprehensive"):
+    def generate_feedback(self, session_title, session_text, feedback_type="comprehensive", profile_sections=None):
         """Generate beta reader/editor feedback for a completed session"""
         if not session_text.strip():
             return {"error": "Session has no content to analyze"}
         
         critique_templates = {
-            "comprehensive": """You are a professional editor and beta reader. Analyze this life story excerpt and provide:
-            1. **Overall Impression** (2-3 sentences)
-            2. **Strengths** (3-5 bullet points)
-            3. **Areas for Improvement** (3-5 bullet points with specific suggestions)
-            4. **Continuity Check** (Note any timeline inconsistencies)
-            5. **Emotional Resonance** (How engaging/emotional is it?)
-            6. **Specific Edits** (3-5 suggested rewrites with explanations)
+            "comprehensive": """You are a professional editor and beta reader. You have been given the subject's complete profile information above.
+
+IMPORTANT INSTRUCTIONS:
+1. Use the profile information to provide personalized feedback
+2. When your feedback is influenced by specific profile details, mark it with [PROFILE: section_name] at the beginning of that comment
+3. Check if the writing aligns with the subject's stated purpose, audience, and desired tone
+4. Verify that the content accurately reflects the subject's life based on their profile
+5. Suggest areas where the profile information could be better incorporated
+
+Provide:
+1. **Overall Impression** (2-3 sentences)
+2. **Strengths** (3-5 bullet points - mark any profile-influenced comments)
+3. **Areas for Improvement** (3-5 bullet points with specific suggestions - mark any profile-influenced comments)
+4. **Continuity Check** (Note any timeline inconsistencies - mark any profile-influenced comments)
+5. **Emotional Resonance** (How engaging/emotional is it? - mark any profile-influenced comments)
+6. **Specific Edits** (3-5 suggested rewrites with explanations - mark any profile-influenced comments)""",
             
-            Format your response clearly with headings and bullet points.""",
+            "concise": """You are an experienced beta reader with access to the subject's profile. Provide brief, actionable feedback that references the profile when relevant.
+
+IMPORTANT: Mark any profile-influenced comments with [PROFILE: section_name]
+
+Focus on:
+- Main strengths (mark profile-influenced ones)
+- 2-3 specific areas to improve (mark profile-influenced ones)
+- 1-2 specific editing suggestions""",
             
-            "concise": """You are an experienced beta reader. Provide brief, actionable feedback on:
-            - Main strengths
-            - 2-3 specific areas to improve
-            - 1-2 specific editing suggestions
-            
-            Keep it under 300 words.""",
-            
-            "developmental": """You are a developmental editor. Focus on:
-            - Narrative structure and flow
-            - Character/personality development
-            - Pacing and detail balance
-            - Theme consistency
-            - Suggested structural changes"""
+            "developmental": """You are a developmental editor with full access to the subject's profile. Evaluate how well the writing serves the subject's goals.
+
+IMPORTANT: Mark any profile-influenced comments with [PROFILE: section_name]
+
+Focus on:
+- Narrative structure and flow (mark profile-influenced comments)
+- Character/personality development (mark profile-influenced comments)
+- Pacing and detail balance (mark profile-influenced comments)
+- Theme consistency (mark profile-influenced comments)
+- Suggested structural changes (mark profile-influenced comments)"""
         }
         
         prompt = critique_templates.get(feedback_type, critique_templates["comprehensive"])
@@ -62,16 +75,16 @@ class BetaReader:
 
         SESSION TITLE: {session_title}
         
-        SESSION CONTENT:
+        FULL CONTEXT (INCLUDING PROFILE):
         {session_text}
         
-        Please provide your analysis:"""
+        Please provide your analysis, remembering to mark any profile-influenced comments with [PROFILE: section_name]:"""
         
         try:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": "You are a thoughtful, constructive editor who balances praise with helpful critique."},
+                    {"role": "system", "content": "You are a thoughtful, constructive editor who balances praise with helpful critique. You always reference the subject's profile information when providing feedback and mark those references clearly with [PROFILE: section_name]."},
                     {"role": "user", "content": full_prompt}
                 ],
                 temperature=0.7,
@@ -80,11 +93,20 @@ class BetaReader:
             
             feedback = response.choices[0].message.content
             
+            # Add a summary of what profile information was used
+            summary = ""
+            if profile_sections:
+                summary = "\n\n---\n📋 **PROFILE INFORMATION ACCESSED BY BETA READER:**\n"
+                for section in set(profile_sections):
+                    summary += f"• {section}\n"
+                summary += "\n*Look for [PROFILE: section_name] markers in the feedback above to see where this information influenced the analysis.*\n"
+            
             return {
                 "session_title": session_title,
-                "feedback": feedback,
+                "feedback": feedback + summary,
                 "generated_at": datetime.now().isoformat(),
-                "feedback_type": feedback_type
+                "feedback_type": feedback_type,
+                "profile_sections_used": list(set(profile_sections)) if profile_sections else []
             }
             
         except Exception as e:
@@ -144,10 +166,32 @@ class BetaReader:
         except:
             st.caption("Generated: Recently")
         
+        # Show what profile information was used
+        if feedback.get('profile_sections_used'):
+            with st.expander("📋 Profile Information Used", expanded=True):
+                st.markdown("The Beta Reader accessed these profile sections to provide personalized feedback:")
+                for section in feedback['profile_sections_used']:
+                    st.markdown(f"✅ **{section}**")
+                st.markdown("\n*Look for `[PROFILE: section_name]` markers in the feedback below to see where this information influenced specific comments.*")
+        
         st.divider()
         
         st.subheader("📝 Editor's Analysis")
-        st.markdown(feedback["feedback"])
+        
+        # Process the feedback to highlight profile-influenced sections
+        feedback_text = feedback["feedback"]
+        
+        # Split into sections and highlight profile markers
+        parts = re.split(r'(\[PROFILE:.*?\])', feedback_text)
+        formatted_feedback = ""
+        for i, part in enumerate(parts):
+            if part.startswith('[PROFILE:') and part.endswith(']'):
+                # This is a profile marker - make it stand out
+                formatted_feedback += f'<span style="background-color: #e8f4fd; color: #0366d6; font-weight: bold; padding: 2px 4px; border-radius: 4px;">{part}</span>'
+            else:
+                formatted_feedback += part
+        
+        st.markdown(formatted_feedback, unsafe_allow_html=True)
         
         st.divider()
         col1, col2 = st.columns(2)
