@@ -576,7 +576,7 @@ def show_privacy_settings():
     st.stop()
 
 # ============================================================================
-# SIMPLE COVER DESIGNER - With editable title, author, and subtitle
+# SIMPLE COVER DESIGNER - Using st.components.v1.html for reliable rendering
 # ============================================================================
 def show_cover_designer():
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
@@ -597,7 +597,7 @@ def show_cover_designer():
         default_title = f"{st.session_state.user_account.get('profile', {}).get('first_name', 'My')}'s Story"
         title = st.text_input("Book Title", value=default_title)
         
-        # Editable subtitle (NEW - simple)
+        # Editable subtitle
         subtitle = st.text_input("Subtitle (optional)", placeholder="A brief subtitle or tagline")
         
         # Editable author name
@@ -616,7 +616,9 @@ def show_cover_designer():
     with col2:
         st.markdown("**Preview (6\" x 9\" portrait)**")
         
-        # Create preview based on whether there's an image
+        # Create a unique height for the component
+        preview_height = 500
+        
         if uploaded_cover:
             img_bytes = uploaded_cover.getvalue()
             img_base64 = base64.b64encode(img_bytes).decode()
@@ -624,37 +626,39 @@ def show_cover_designer():
             # Build subtitle HTML if provided
             subtitle_html = f'<h2 style="font-family:{title_font}; color:white; font-size:24px; margin:5px 0 15px 0; text-shadow:2px 2px 4px black;">{subtitle}</h2>' if subtitle else ''
             
-            preview_style = f'''
-            <div style="
-                width: 100%;
-                aspect-ratio: 600/900;
-                background-image: url('data:image/jpeg;base64,{img_base64}');
-                background-size: cover;
-                background-position: center;
-                border: 2px solid #ddd;
-                border-radius: 10px;
-                overflow: hidden;
-                position: relative;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            ">
+            html_content = f'''
+            <div style="width:100%; max-width:400px; margin:0 auto;">
                 <div style="
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0,0,0,0.3);
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: center;
-                    align-items: center;
-                    text-align: center;
-                    padding: 20px;
-                    box-sizing: border-box;
+                    width:100%;
+                    aspect-ratio:600/900;
+                    background-image:url('data:image/jpeg;base64,{img_base64}');
+                    background-size:cover;
+                    background-position:center;
+                    border:2px solid #ddd;
+                    border-radius:10px;
+                    overflow:hidden;
+                    position:relative;
+                    box-shadow:0 4px 8px rgba(0,0,0,0.1);
                 ">
-                    <h1 style="font-family:{title_font}; color:white; font-size:48px; margin:0; text-shadow:2px 2px 4px black;">{title}</h1>
-                    {subtitle_html}
-                    <p style="font-family:{title_font}; color:white; font-size:24px; margin-top:15px; text-shadow:1px 1px 2px black;">by {author}</p>
+                    <div style="
+                        position:absolute;
+                        top:0;
+                        left:0;
+                        width:100%;
+                        height:100%;
+                        background:rgba(0,0,0,0.3);
+                        display:flex;
+                        flex-direction:column;
+                        justify-content:center;
+                        align-items:center;
+                        text-align:center;
+                        padding:20px;
+                        box-sizing:border-box;
+                    ">
+                        <h1 style="font-family:{title_font}; color:white; font-size:48px; margin:0; text-shadow:2px 2px 4px black;">{title}</h1>
+                        {subtitle_html}
+                        <p style="font-family:{title_font}; color:white; font-size:24px; margin-top:15px; text-shadow:1px 1px 2px black;">by {author}</p>
+                    </div>
                 </div>
             </div>
             '''
@@ -662,29 +666,34 @@ def show_cover_designer():
             # Build subtitle HTML if provided
             subtitle_html = f'<h2 style="font-family:{title_font}; color:{title_color}; font-size:24px; margin:5px 0 15px 0;">{subtitle}</h2>' if subtitle else ''
             
-            preview_style = f'''
-            <div style="
-                width: 100%;
-                aspect-ratio: 600/900;
-                background-color: {background_color};
-                border: 2px solid #ddd;
-                border-radius: 10px;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
-                align-items: center;
-                text-align: center;
-                padding: 20px;
-                box-sizing: border-box;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            ">
-                <h1 style="font-family:{title_font}; color:{title_color}; font-size:48px; margin:0;">{title}</h1>
-                {subtitle_html}
-                <p style="font-family:{title_font}; color:{title_color}; font-size:24px; margin-top:15px;">by {author}</p>
+            html_content = f'''
+            <div style="width:100%; max-width:400px; margin:0 auto;">
+                <div style="
+                    width:100%;
+                    aspect-ratio:600/900;
+                    background-color:{background_color};
+                    border:2px solid #ddd;
+                    border-radius:10px;
+                    display:flex;
+                    flex-direction:column;
+                    justify-content:center;
+                    align-items:center;
+                    text-align:center;
+                    padding:20px;
+                    box-sizing:border-box;
+                    box-shadow:0 4px 8px rgba(0,0,0,0.1);
+                ">
+                    <h1 style="font-family:{title_font}; color:{title_color}; font-size:48px; margin:0;">{title}</h1>
+                    {subtitle_html}
+                    <p style="font-family:{title_font}; color:{title_color}; font-size:24px; margin-top:15px;">by {author}</p>
+                </div>
             </div>
             '''
         
-        st.markdown(preview_style, unsafe_allow_html=True)
+        # Use st.components.v1.html instead of st.markdown
+        from streamlit.components.v1 import html
+        html(html_content, height=preview_height)
+        
         st.caption("6\" wide × 9\" tall (portrait format)")
     
     if st.button("💾 Save Cover Design", type="primary", use_container_width=True):
