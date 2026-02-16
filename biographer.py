@@ -1516,7 +1516,51 @@ def load_question_bank(sessions, bank_name, bank_type, bank_id=None):
 def generate_beta_reader_feedback(session_title, session_text, feedback_type="comprehensive"):
     if not beta_reader: 
         return {"error": "BetaReader not available"}
-    return beta_reader.generate_feedback(session_title, session_text, feedback_type)
+    
+    # Get profile context to provide to beta reader
+    profile_context = ""
+    if st.session_state.user_account:
+        # Get Narrative GPS (Heart of Your Story)
+        gps = st.session_state.user_account.get('narrative_gps', {})
+        if gps:
+            profile_context += "\n\n=== BOOK PROJECT CONTEXT (From Narrative GPS) ===\n"
+            if gps.get('book_title'):
+                profile_context += f"Book Title: {gps['book_title']}\n"
+            if gps.get('genre'):
+                genre = gps['genre']
+                if genre == "Other" and gps.get('genre_other'):
+                    genre = gps['genre_other']
+                profile_context += f"Genre: {genre}\n"
+            if gps.get('purposes'):
+                profile_context += f"Purpose: {', '.join(gps['purposes'])}\n"
+            if gps.get('reader_takeaway'):
+                profile_context += f"Reader Takeaway: {gps['reader_takeaway']}\n"
+            if gps.get('emotional_tone'):
+                profile_context += f"Emotional Tone: {gps['emotional_tone']}\n"
+            if gps.get('narrative_voices'):
+                profile_context += f"Narrative Voice: {', '.join(gps['narrative_voices'])}\n"
+        
+        # Get Enhanced Biographer Profile
+        ep = st.session_state.user_account.get('enhanced_profile', {})
+        if ep:
+            profile_context += "\n\n=== BIOGRAPHER'S PROFILE (Subject Information) ===\n"
+            if ep.get('birth_place'):
+                profile_context += f"Birth Place: {ep['birth_place']}\n"
+            if ep.get('childhood_home'):
+                profile_context += f"Childhood Home: {ep['childhood_home'][:200]}...\n" if len(ep['childhood_home']) > 200 else f"Childhood Home: {ep['childhood_home']}\n"
+            if ep.get('family_traditions'):
+                profile_context += f"Family Background: {ep['family_traditions'][:200]}...\n" if len(ep['family_traditions']) > 200 else f"Family Background: {ep['family_traditions']}\n"
+            if ep.get('career_path'):
+                profile_context += f"Career: {ep['career_path'][:200]}...\n" if len(ep['career_path']) > 200 else f"Career: {ep['career_path']}\n"
+            if ep.get('life_lessons'):
+                profile_context += f"Life Philosophy: {ep['life_lessons'][:200]}...\n" if len(ep['life_lessons']) > 200 else f"Life Philosophy: {ep['life_lessons']}\n"
+            if ep.get('legacy'):
+                profile_context += f"Legacy Hope: {ep['legacy'][:200]}...\n" if len(ep['legacy']) > 200 else f"Legacy Hope: {ep['legacy']}\n"
+    
+    # Combine profile context with session text
+    full_context = profile_context + "\n\n=== SESSION CONTENT TO REVIEW ===\n" + session_text
+    
+    return beta_reader.generate_feedback(session_title, full_context, feedback_type)
 
 # ============================================================================
 # FIXED: save_beta_feedback function
