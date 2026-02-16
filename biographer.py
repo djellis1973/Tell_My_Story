@@ -7,7 +7,7 @@ import os
 import re
 import hashlib
 import smtplib
-from email.mime.text import MIMEText
+from email.mime.text import MIMETextcover
 from email.mime.multipart import MIMEMultipart
 import secrets
 import string
@@ -576,7 +576,7 @@ def show_privacy_settings():
     st.stop()
 
 # ============================================================================
-# FIXED COVER DESIGNER MODAL - Proper HTML rendering
+# FIXED COVER DESIGNER MODAL - Proper HTML rendering with single string
 # ============================================================================
 def show_cover_designer():
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
@@ -592,13 +592,12 @@ def show_cover_designer():
     book_dimensions = {
         "width": 600,  # pixels at 100 DPI (6 inches)
         "height": 900,  # pixels at 100 DPI (9 inches)
-        "aspect_ratio": 1.5  # 9:6 = 1.5
     }
     
     # Load existing cover design if it exists
     existing_design = st.session_state.user_account.get('cover_design', {})
     
-    col1, col2 = st.columns([1, 1.2])  # Slightly larger preview column
+    col1, col2 = st.columns([1, 1.2])
     
     with col1:
         st.markdown("**Cover Elements**")
@@ -720,27 +719,58 @@ def show_cover_designer():
         st.markdown("**Live Book Cover Preview**")
         st.markdown("*Preview shows approximate layout (6\" x 9\" portrait format)*")
         
-        # Generate the preview HTML with proper portrait dimensions
-        preview_html = generate_cover_preview(
-            title=title,
-            subtitle=subtitle,
-            author_name=author_name,
-            series_name=series_name if series_name else None,
-            series_number=series_number if series_number else None,
-            uploaded_image=uploaded_cover,
-            use_blurb=use_blurb,
-            blurb_text=blurb_text if use_blurb else None,
-            blurb_position=blurb_position if use_blurb else None,
-            title_font=title_font,
-            title_color=title_color,
-            text_color=text_color,
-            background_color=background_color if not uploaded_cover else None,
-            cover_type=cover_type,
-            dimensions=book_dimensions
-        )
+        # Create a container for the preview
+        preview_container = st.container()
         
-        # Use markdown with unsafe_allow_html to render the HTML properly
-        st.markdown(preview_html, unsafe_allow_html=True)
+        with preview_container:
+            # Generate the preview HTML
+            if uploaded_cover:
+                img_base64 = base64.b64encode(uploaded_cover.getvalue()).decode()
+                preview_html = f'''
+                <div style="width:100%; max-width:{book_dimensions['width']}px; margin:0 auto; border:2px solid #ddd; border-radius:8px; overflow:hidden; box-shadow:0 10px 20px rgba(0,0,0,0.2); aspect-ratio:{book_dimensions['width']}/{book_dimensions['height']};">
+                    <div style="width:100%; height:100%; background-image:url('data:image/jpeg;base64,{img_base64}'); background-size:cover; background-position:center; position:relative; display:flex; flex-direction:column; justify-content:space-between; padding:30px; box-sizing:border-box; font-family:{title_font}, serif;">
+                        <div style="position:absolute; top:0; left:0; width:100%; height:100%; background:linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.5));"></div>
+                        <div style="position:relative; z-index:2; height:100%; display:flex; flex-direction:column;">
+                            <div style="flex:0 0 auto; text-align:center;">
+                                {f'<div style="color:#ffffff; font-size:18px; letter-spacing:2px; margin-bottom:10px; text-transform:uppercase; text-shadow:2px 2px 4px rgba(0,0,0,0.5); font-weight:300;">' + series_name + (f' • {series_number}' if series_number else '') + '</div>' if series_name else ''}
+                                {f'<div style="color:#ffffff; font-size:16px; font-style:italic; margin:10px 0; padding:10px; border-left:3px solid {title_color}; text-shadow:2px 2px 4px rgba(0,0,0,0.5); background:rgba(0,0,0,0.2); border-radius:4px;">"{blurb_text}"</div>' if use_blurb and blurb_text and blurb_position=="Top" else ''}
+                            </div>
+                            <div style="flex:1; display:flex; flex-direction:column; justify-content:center; text-align:center;">
+                                <h1 style="color:#ffffff; font-size:48px; font-weight:bold; margin:0 0 10px 0; line-height:1.2; text-shadow:2px 2px 4px rgba(0,0,0,0.5); font-family:{title_font}, serif;">{title}</h1>
+                                {f'<h2 style="color:#ffffff; font-size:24px; font-weight:normal; margin:0 0 20px 0; text-shadow:2px 2px 4px rgba(0,0,0,0.5); font-family:{title_font}, serif;">{subtitle}</h2>' if subtitle else ''}
+                            </div>
+                            <div style="flex:0 0 auto; text-align:center;">
+                                {f'<div style="color:#ffffff; font-size:24px; margin:10px 0; text-shadow:2px 2px 4px rgba(0,0,0,0.5); font-family:{title_font}, serif;">by {author_name}</div>' if author_name else ''}
+                                {f'<div style="color:#ffffff; font-size:16px; font-style:italic; margin-top:10px; padding:10px; border-right:3px solid {title_color}; text-shadow:2px 2px 4px rgba(0,0,0,0.5); background:rgba(0,0,0,0.2); border-radius:4px;">"{blurb_text}"</div>' if use_blurb and blurb_text and blurb_position=="Bottom" else ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                '''
+            else:
+                preview_html = f'''
+                <div style="width:100%; max-width:{book_dimensions['width']}px; margin:0 auto; border:2px solid #ddd; border-radius:8px; overflow:hidden; box-shadow:0 10px 20px rgba(0,0,0,0.2); aspect-ratio:{book_dimensions['width']}/{book_dimensions['height']};">
+                    <div style="width:100%; height:100%; background-color:{background_color}; display:flex; flex-direction:column; justify-content:space-between; padding:30px; box-sizing:border-box; font-family:{title_font}, serif;">
+                        <div style="height:100%; display:flex; flex-direction:column;">
+                            <div style="flex:0 0 auto; text-align:center;">
+                                {f'<div style="color:{text_color}; font-size:18px; letter-spacing:2px; margin-bottom:10px; text-transform:uppercase; font-weight:300;">' + series_name + (f' • {series_number}' if series_number else '') + '</div>' if series_name else ''}
+                                {f'<div style="color:{text_color}; font-size:16px; font-style:italic; margin:10px 0; padding:10px; border-left:3px solid {title_color}; background:rgba(255,255,255,0.8); border-radius:4px;">"{blurb_text}"</div>' if use_blurb and blurb_text and blurb_position=="Top" else ''}
+                            </div>
+                            <div style="flex:1; display:flex; flex-direction:column; justify-content:center; text-align:center;">
+                                <h1 style="color:{title_color}; font-size:48px; font-weight:bold; margin:0 0 10px 0; line-height:1.2; font-family:{title_font}, serif;">{title}</h1>
+                                {f'<h2 style="color:{text_color}; font-size:24px; font-weight:normal; margin:0 0 20px 0; font-family:{title_font}, serif;">{subtitle}</h2>' if subtitle else ''}
+                            </div>
+                            <div style="flex:0 0 auto; text-align:center;">
+                                {f'<div style="color:{text_color}; font-size:24px; margin:10px 0; font-family:{title_font}, serif;">by {author_name}</div>' if author_name else ''}
+                                {f'<div style="color:{text_color}; font-size:16px; font-style:italic; margin-top:10px; padding:10px; border-right:3px solid {title_color}; background:rgba(255,255,255,0.8); border-radius:4px;">"{blurb_text}"</div>' if use_blurb and blurb_text and blurb_position=="Bottom" else ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                '''
+            
+            # Display the preview
+            st.markdown(preview_html, unsafe_allow_html=True)
         
         # Add dimension info
         st.caption(f"📐 Portrait format: 6\" wide × 9\" tall (shown at {book_dimensions['width']}px × {book_dimensions['height']}px)")
@@ -751,267 +781,42 @@ def show_cover_designer():
     col_save1, col_save2, col_save3 = st.columns([1, 2, 1])
     with col_save2:
         if st.button("💾 Save Cover Design", type="primary", use_container_width=True):
-            save_cover_design(
-                title=title,
-                subtitle=subtitle,
-                author_name=author_name,
-                series_name=series_name,
-                series_number=series_number,
-                uploaded_cover=uploaded_cover,
-                use_blurb=use_blurb,
-                blurb_text=blurb_text if use_blurb else None,
-                blurb_position=blurb_position if use_blurb else None,
-                cover_type=cover_type,
-                title_font=title_font,
-                title_color=title_color,
-                text_color=text_color,
-                background_color=background_color if not uploaded_cover else None
-            )
+            if 'cover_design' not in st.session_state.user_account:
+                st.session_state.user_account['cover_design'] = {}
+            
+            st.session_state.user_account['cover_design'].update({
+                "title": title,
+                "subtitle": subtitle,
+                "author_name": author_name,
+                "series_name": series_name,
+                "series_number": series_number,
+                "use_blurb": use_blurb,
+                "blurb_text": blurb_text if use_blurb else None,
+                "blurb_position": blurb_position if use_blurb else None,
+                "cover_type": cover_type,
+                "title_font": title_font,
+                "title_color": title_color,
+                "text_color": text_color,
+                "background_color": background_color if not uploaded_cover else None,
+                "last_updated": datetime.now().isoformat()
+            })
+            
+            if uploaded_cover:
+                cover_path = f"uploads/covers/{st.session_state.user_id}_cover.jpg"
+                os.makedirs("uploads/covers", exist_ok=True)
+                img_data = uploaded_cover.getvalue()
+                with open(cover_path, 'wb') as f:
+                    f.write(img_data)
+                st.session_state.user_account['cover_design']['cover_image_base64'] = base64.b64encode(img_data).decode()
+                st.session_state.user_account['cover_design']['cover_image'] = cover_path
+            
+            save_account_data(st.session_state.user_account)
+            st.success("✅ Cover design saved with portrait format!")
+            time.sleep(1)
+            st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
-
-
-def generate_cover_preview(title, subtitle=None, author_name=None, series_name=None, 
-                          series_number=None, uploaded_image=None, use_blurb=False,
-                          blurb_text=None, blurb_position="Top", title_font="Georgia",
-                          title_color="#000000", text_color="#333333", background_color="#FFFFFF",
-                          cover_type="Simple", dimensions=None):
-    """Generate HTML for cover preview with proper portrait orientation"""
-    
-    if dimensions is None:
-        dimensions = {"width": 600, "height": 900}
-    
-    # Determine text color based on background (for uploaded images, use white text with shadow)
-    text_shadow = "2px 2px 4px rgba(0,0,0,0.5)" if uploaded_image else "none"
-    title_text_color = "#ffffff" if uploaded_image else title_color
-    body_text_color = "#ffffff" if uploaded_image else text_color
-    
-    # Handle uploaded image
-    if uploaded_image:
-        img_base64 = base64.b64encode(uploaded_image.getvalue()).decode()
-        background_style = f"""
-            background-image: url('data:image/jpeg;base64,{img_base64}');
-            background-size: cover;
-            background-position: center;
-            position: relative;
-        """
-        # Add overlay for better text readability
-        overlay = '''
-            <div style="
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.5));
-                pointer-events: none;
-            "></div>
-        '''
-    else:
-        background_style = f"background-color: {background_color};"
-        overlay = ""
-    
-    # Determine font sizes based on cover type
-    font_sizes = {
-        "Simple": {"title": "48px", "subtitle": "24px", "author": "24px", "series": "18px", "blurb": "16px"},
-        "Elegant": {"title": "52px", "subtitle": "26px", "author": "26px", "series": "18px", "blurb": "16px"},
-        "Modern": {"title": "44px", "subtitle": "22px", "author": "22px", "series": "16px", "blurb": "14px"},
-        "Classic": {"title": "56px", "subtitle": "28px", "author": "28px", "series": "20px", "blurb": "18px"},
-        "Vintage": {"title": "46px", "subtitle": "23px", "author": "23px", "series": "17px", "blurb": "15px"}
-    }
-    
-    sizes = font_sizes.get(cover_type, font_sizes["Simple"])
-    
-    # Build the preview HTML as a single string
-    preview_html = f'''
-    <div style="
-        width: 100%;
-        max-width: {dimensions['width']}px;
-        margin: 20px auto;
-        position: relative;
-        border: 2px solid #ddd;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-        aspect-ratio: {dimensions['width']} / {dimensions['height']};
-    ">
-        <div style="
-            width: 100%;
-            height: 100%;
-            {background_style}
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 30px;
-            box-sizing: border-box;
-            font-family: {title_font}, serif;
-            position: relative;
-        ">
-            {overlay}
-            
-            <!-- Content (positioned above overlay) -->
-            <div style="position: relative; z-index: 2; height: 100%; display: flex; flex-direction: column;">
-    '''
-    
-    # Top section
-    preview_html += '<div style="flex: 0 0 auto; text-align: center;">'
-    
-    # Series info
-    if series_name:
-        series_display = f"{series_name}" + (f" • {series_number}" if series_number else "")
-        preview_html += f'''
-            <div style="
-                color: {body_text_color};
-                font-size: {sizes['series']};
-                letter-spacing: 2px;
-                margin-bottom: 10px;
-                text-transform: uppercase;
-                text-shadow: {text_shadow};
-                font-weight: 300;
-            ">
-                {series_display}
-            </div>
-        '''
-    
-    # Top blurb
-    if use_blurb and blurb_text and blurb_position == "Top":
-        preview_html += f'''
-            <div style="
-                color: {body_text_color};
-                font-size: {sizes['blurb']};
-                font-style: italic;
-                margin: 10px 0;
-                padding: 10px;
-                border-left: 3px solid {title_color};
-                text-shadow: {text_shadow};
-                background: rgba(0,0,0,0.2);
-                border-radius: 4px;
-            ">
-                "{blurb_text}"
-            </div>
-        '''
-    
-    preview_html += '</div>'  # Close top section
-    
-    # Middle section - Title and subtitle
-    preview_html += f'''
-        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; text-align: center;">
-            <h1 style="
-                color: {title_text_color};
-                font-size: {sizes['title']};
-                font-weight: bold;
-                margin: 0 0 10px 0;
-                line-height: 1.2;
-                text-shadow: {text_shadow};
-                font-family: {title_font}, serif;
-            ">{title}</h1>
-    '''
-    
-    if subtitle:
-        preview_html += f'''
-            <h2 style="
-                color: {body_text_color};
-                font-size: {sizes['subtitle']};
-                font-weight: normal;
-                margin: 0 0 20px 0;
-                text-shadow: {text_shadow};
-                font-family: {title_font}, serif;
-            ">{subtitle}</h2>
-        '''
-    
-    preview_html += '</div>'  # Close middle section
-    
-    # Bottom section
-    preview_html += '<div style="flex: 0 0 auto; text-align: center;">'
-    
-    # Author name
-    if author_name:
-        preview_html += f'''
-            <div style="
-                color: {body_text_color};
-                font-size: {sizes['author']};
-                margin: 10px 0;
-                text-shadow: {text_shadow};
-                font-family: {title_font}, serif;
-            ">
-                by {author_name}
-            </div>
-        '''
-    
-    # Bottom blurb
-    if use_blurb and blurb_text and blurb_position == "Bottom":
-        preview_html += f'''
-            <div style="
-                color: {body_text_color};
-                font-size: {sizes['blurb']};
-                font-style: italic;
-                margin-top: 10px;
-                padding: 10px;
-                border-right: 3px solid {title_color};
-                text-shadow: {text_shadow};
-                background: rgba(0,0,0,0.2);
-                border-radius: 4px;
-            ">
-                "{blurb_text}"
-            </div>
-        '''
-    
-    # Close all divs
-    preview_html += '''
-            </div>
-        </div>
-    </div>
-    </div>
-    '''
-    
-    return preview_html
-
-
-def save_cover_design(title, subtitle, author_name, series_name, series_number, 
-                     uploaded_cover, use_blurb, blurb_text, blurb_position,
-                     cover_type, title_font, title_color, text_color, background_color):
-    """Save the cover design to user account"""
-    
-    if 'cover_design' not in st.session_state.user_account:
-        st.session_state.user_account['cover_design'] = {}
-    
-    # Update with all the new fields
-    st.session_state.user_account['cover_design'].update({
-        "title": title,
-        "subtitle": subtitle,
-        "author_name": author_name,
-        "series_name": series_name,
-        "series_number": series_number,
-        "use_blurb": use_blurb,
-        "blurb_text": blurb_text,
-        "blurb_position": blurb_position,
-        "cover_type": cover_type,
-        "title_font": title_font,
-        "title_color": title_color,
-        "text_color": text_color,
-        "background_color": background_color,
-        "last_updated": datetime.now().isoformat()
-    })
-    
-    if uploaded_cover:
-        # Save the uploaded image
-        cover_path = f"uploads/covers/{st.session_state.user_id}_cover.jpg"
-        os.makedirs("uploads/covers", exist_ok=True)
-        
-        # Read and save the image
-        img_data = uploaded_cover.getvalue()
-        with open(cover_path, 'wb') as f:
-            f.write(img_data)
-        
-        # Also save a base64 version in the account data for quick preview
-        st.session_state.user_account['cover_design']['cover_image_base64'] = base64.b64encode(img_data).decode()
-        st.session_state.user_account['cover_design']['cover_image'] = cover_path
-    
-    save_account_data(st.session_state.user_account)
-    st.success("✅ Cover design saved with portrait format!")
-    time.sleep(1)
-    st.rerun()
 
 # ============================================================================
 # NARRATIVE GPS HELPER FUNCTIONS
