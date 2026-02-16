@@ -1,4 +1,4 @@
-# biographer.py – Tell My Story App (FIXED VERSION)
+# biographer.py – Tell My Story App (COMPLETE VERSION WITH AI REWRITE)
 import streamlit as st
 import json
 from datetime import datetime, date
@@ -78,9 +78,9 @@ default_state = {
     "current_bank_id": None, "show_bank_manager": False, "show_bank_editor": False,
     "editing_bank_id": None, "editing_bank_name": None, "qb_manager": None, "qb_manager_initialized": False,
     "confirm_delete": None, "user_account": None, "show_profile_setup": False,
-    "image_handler": None, "show_image_manager": False, "show_ai_suggestions": False,
-    "current_ai_suggestions": None, "current_suggestion_topic": None, "editor_content": {},
-    "show_privacy_settings": False, "show_cover_designer": False,
+    "image_handler": None, "show_image_manager": False,
+    "current_rewrite_data": None, "show_ai_rewrite": False, "show_ai_rewrite_menu": False,
+    "editor_content": {}, "show_privacy_settings": False, "show_cover_designer": False,
     "beta_feedback_display": None, "beta_feedback_storage": {}
 }
 for key, value in default_state.items():
@@ -519,7 +519,8 @@ def logout_user():
             'selected_vignette_for_session', 'published_vignette', 'show_beta_reader',
             'current_beta_feedback', 'current_question_bank', 'current_bank_name',
             'current_bank_type', 'current_bank_id', 'show_bank_manager', 'show_bank_editor',
-            'editing_bank_id', 'editing_bank_name', 'show_image_manager', 'editor_content']
+            'editing_bank_id', 'editing_bank_name', 'show_image_manager', 'editor_content',
+            'current_rewrite_data', 'show_ai_rewrite', 'show_ai_rewrite_menu']
     for key in keys:
         if key in st.session_state: 
             del st.session_state[key]
@@ -751,6 +752,7 @@ def show_cover_designer():
     
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
+
 # ============================================================================
 # NARRATIVE GPS HELPER FUNCTIONS
 # ============================================================================
@@ -825,83 +827,201 @@ def get_narrative_gps_for_ai():
     return context
 
 # ============================================================================
-# AI WRITING SUGGESTIONS FUNCTION
+# AI REWRITE FUNCTION - 1st, 2nd, 3rd Person with Profile Context
 # ============================================================================
-def generate_writing_suggestions(question, answer_text, session_title):
+def ai_rewrite_answer(original_text, person_option, question_text, session_title):
+    """Rewrite the user's answer in 1st, 2nd, or 3rd person using profile context"""
     if not client:
         return {"error": "OpenAI client not available"}
     
     try:
+        # Get profile context for better rewriting
         gps_context = get_narrative_gps_for_ai()
-        clean_answer = re.sub(r'<[^>]+>', '', answer_text)
         
-        if len(clean_answer.split()) < 20:
-            return None
+        # Also get enhanced profile for deeper context
+        enhanced_context = ""
+        if st.session_state.user_account and 'enhanced_profile' in st.session_state.user_account:
+            ep = st.session_state.user_account['enhanced_profile']
+            if ep:
+                enhanced_context = "\n\n=== ADDITIONAL BIOGRAPHER CONTEXT ===\n"
+                if ep.get('birth_place'): enhanced_context += f"• Born: {ep['birth_place']}\n"
+                if ep.get('life_lessons'): enhanced_context += f"• Life Philosophy: {ep['life_lessons'][:200]}...\n"
+                if ep.get('legacy'): enhanced_context += f"• Legacy Hope: {ep['legacy'][:200]}...\n"
         
-        system_prompt = """You are an expert writing coach and developmental editor. Your task is to provide focused, actionable suggestions for improving a piece of life story writing.
+        # Clean the text (remove HTML tags)
+        clean_text = re.sub(r'<[^>]+>', '', original_text)
+        
+        if len(clean_text.split()) < 5:
+            return {"error": "Text too short to rewrite (minimum 5 words)"}
+        
+        # Person-specific instructions
+        person_instructions = {
+            "1st": {
+                "name": "First Person",
+                "instruction": "Rewrite this in FIRST PERSON ('I', 'me', 'my', 'we', 'our'). Keep the authentic voice of the author telling their own story.",
+                "example": "I remember the day clearly. The sun was setting and I felt...",
+                "emoji": "👤"
+            },
+            "2nd": {
+                "name": "Second Person",
+                "instruction": "Rewrite this in SECOND PERSON ('you', 'your') as if speaking directly to the reader. Make it feel like advice, a letter, or a conversation with the reader.",
+                "example": "You remember that day clearly. The sun was setting and you felt...",
+                "emoji": "💬"
+            },
+            "3rd": {
+                "name": "Third Person",
+                "instruction": "Rewrite this in THIRD PERSON ('he', 'she', 'they', 'the author', the person's name). Write as if telling someone else's story to readers.",
+                "example": f"They remember the day clearly. The sun was setting and they felt...",
+                "emoji": "📖"
+            }
+        }
+        
+        # Get author's name for 3rd person
+        author_name = ""
+        if st.session_state.user_account:
+            profile = st.session_state.user_account.get('profile', {})
+            first = profile.get('first_name', '')
+            last = profile.get('last_name', '')
+            if first and last:
+                author_name = f"{first} {last}"
+            elif first:
+                author_name = first
+        
+        system_prompt = f"""You are an expert writing assistant and ghostwriter. Your task is to rewrite the author's raw answer in {person_instructions[person_option]['name']}.
 
-Based on the story context provided and the user's answer, offer 2-3 specific suggestions that will help strengthen this passage. Focus on:
-1. Alignment with the book's stated purpose and audience
-2. Consistency with the desired tone and voice
-3. Opportunities to deepen emotional impact or add sensory details
-4. Areas where the story could be expanded or clarified
-5. Connections to broader themes in the book project
+{person_instructions[person_option]['instruction']}
 
-Keep suggestions positive, encouraging, and actionable. Format them as brief bullet points with a brief explanation for each."""
+EXAMPLE STYLE:
+{person_instructions[person_option]['example']}
 
-        user_prompt = f"""{gps_context}
+IMPORTANT GUIDELINES:
+1. Use the profile context below to understand WHO the author is
+2. Preserve all key facts, emotions, and details from the original
+3. Maintain the author's unique voice and personality
+4. Fix any grammar issues naturally
+5. Make it flow better while keeping it authentic
+6. DO NOT add fictional events or details not in the original
+7. If using third person and you know the author's name, use it naturally
+8. Return ONLY the rewritten text, no explanations, no prefixes
 
+PROFILE CONTEXT (Use this to understand the author's voice and story):
+{gps_context}
+{enhanced_context}
+
+QUESTION BEING ANSWERED: {question_text}
 SESSION: {session_title}
-QUESTION: {question}
-ANSWER: {clean_answer}
 
-Based on the book project context above, provide 2-3 specific suggestions to improve this answer. Focus on making it more aligned with the book's purpose, audience, and desired tone."""
+ORIGINAL ANSWER (to rewrite):
+{clean_text}
+
+REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": "Please rewrite this in the specified voice."}
             ],
-            max_tokens=500,
+            max_tokens=len(clean_text.split()) * 3,  # Allow expansion
             temperature=0.7
         )
         
-        suggestions = response.choices[0].message.content
-        return suggestions
+        rewritten = response.choices[0].message.content.strip()
+        
+        # Clean up any markdown or quotes the AI might add
+        rewritten = re.sub(r'^["\']|["\']$', '', rewritten)
+        rewritten = re.sub(r'^Here\'s the rewritten version:?\s*', '', rewritten, flags=re.IGNORECASE)
+        
+        return {
+            "success": True,
+            "original": clean_text,
+            "rewritten": rewritten,
+            "person": person_instructions[person_option]["name"],
+            "emoji": person_instructions[person_option]["emoji"]
+        }
+        
     except Exception as e:
         return {"error": str(e)}
 
-def show_ai_suggestions_modal():
-    if not st.session_state.get('current_ai_suggestions'):
+# ============================================================================
+# AI REWRITE MODAL
+# ============================================================================
+def show_ai_rewrite_modal():
+    if not st.session_state.get('current_rewrite_data'):
         return
     
-    with st.container():
-        st.markdown("### 💡 AI Writing Suggestions")
-        
-        col1, col2 = st.columns([6, 1])
-        with col2:
-            if st.button("✕", key="close_suggestions"):
-                st.session_state.show_ai_suggestions = False
-                st.session_state.current_ai_suggestions = None
-                st.rerun()
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([6, 1])
+    with col1:
+        st.markdown(f"### {st.session_state.current_rewrite_data.get('emoji', '✨')} AI Rewrite - {st.session_state.current_rewrite_data.get('person', '')}")
+    with col2:
+        if st.button("✕", key="close_rewrite_modal"):
+            st.session_state.show_ai_rewrite = False
+            st.session_state.current_rewrite_data = None
+            st.rerun()
+    
+    st.markdown("---")
+    
+    rewrite_data = st.session_state.current_rewrite_data
+    
+    if rewrite_data.get('error'):
+        st.error(f"Could not rewrite: {rewrite_data['error']}")
+    else:
+        st.markdown("**📝 Original Version:**")
+        with st.container():
+            st.markdown(f'<div class="original-text-box">{rewrite_data["original"]}</div>', unsafe_allow_html=True)
         
         st.markdown("---")
         
-        suggestions = st.session_state.current_ai_suggestions
-        if isinstance(suggestions, dict) and suggestions.get('error'):
-            st.error(f"Could not generate suggestions: {suggestions['error']}")
-        else:
-            st.markdown("**Based on your book's context, here are some ideas to consider:**")
-            st.markdown(suggestions)
-            
-            st.markdown("---")
-            st.markdown("*These are suggestions only - trust your instincts and write the story only you can tell.*")
+        st.markdown(f"**✨ Rewritten Version ({rewrite_data['person']}):**")
+        with st.container():
+            st.markdown(f'<div class="rewritten-text-box">{rewrite_data["rewritten"]}</div>', unsafe_allow_html=True)
         
-        if st.button("Close", key="close_suggestions_btn", width='stretch'):
-            st.session_state.show_ai_suggestions = False
-            st.session_state.current_ai_suggestions = None
-            st.rerun()
+        st.markdown("---")
+        st.markdown("*This rewrite used your profile information to better capture your authentic voice.*")
+        
+        # Buttons
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("📋 Copy to Clipboard", key="copy_rewrite", use_container_width=True):
+                st.info("✅ Copied! Select the text above and press Ctrl+C")
+                
+        with col2:
+            if st.button("📝 Replace Original", key="replace_rewrite", type="primary", use_container_width=True):
+                # Get the editor content key
+                current_session = SESSIONS[st.session_state.current_session]
+                current_session_id = current_session["id"]
+                current_question_text = st.session_state.current_question_override or current_session["questions"][st.session_state.current_question]
+                
+                # Save the rewritten version
+                editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
+                content_key = f"{editor_key}_content"
+                
+                # Wrap in paragraph tags if not present
+                new_content = rewrite_data["rewritten"]
+                if not new_content.startswith('<p>'):
+                    new_content = f'<p>{new_content}</p>'
+                
+                st.session_state[content_key] = new_content
+                
+                # Save to database
+                save_response(current_session_id, current_question_text, new_content)
+                
+                st.success("✅ Replaced with rewritten version!")
+                time.sleep(1)
+                st.session_state.show_ai_rewrite = False
+                st.session_state.current_rewrite_data = None
+                st.rerun()
+        
+        with col3:
+            if st.button("🔄 Try Different Voice", key="try_another", use_container_width=True):
+                st.session_state.show_ai_rewrite = False
+                st.session_state.current_rewrite_data = None
+                st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
 
 # ============================================================================
 # ENHANCED BIOGRAPHER PROFILE SECTION
@@ -1450,13 +1570,6 @@ def save_response(session_id, question, answer):
     success = save_user_data(user_id, st.session_state.responses)
     if success: 
         st.session_state.data_loaded = False
-        
-        session_title = st.session_state.responses[session_id].get("title", f"Session {session_id}")
-        suggestions = generate_writing_suggestions(question, answer, session_title)
-        if suggestions and not isinstance(suggestions, dict) or (isinstance(suggestions, dict) and not suggestions.get('error')):
-            st.session_state.current_ai_suggestions = suggestions
-            st.session_state.show_ai_suggestions = True
-            st.session_state.current_suggestion_topic = question
     
     return success
 
@@ -1732,6 +1845,7 @@ def generate_beta_reader_feedback(session_title, session_text, feedback_type="co
     full_context = profile_context + "\n=== SESSION CONTENT TO REVIEW ===\n\n" + session_text
     
     return beta_reader.generate_feedback(session_title, full_context, feedback_type, accessed_profile_sections)
+
 # ============================================================================
 # FIXED: save_beta_feedback function
 # ============================================================================
@@ -1839,7 +1953,7 @@ def display_saved_feedback(user_id, session_id):
                     st.markdown(f"💡 {sug}")
 
 # ============================================================================
-# NEW: Save vignette beta feedback - ADD IT HERE, RIGHT BELOW save_beta_feedback
+# NEW: Save vignette beta feedback
 # ============================================================================
 def save_vignette_beta_feedback(user_id, vignette_id, feedback_data, vignette_title):
     if not user_id:
@@ -1888,6 +2002,7 @@ def save_vignette_beta_feedback(user_id, vignette_id, feedback_data, vignette_ti
     except Exception as e:
         print(f"Error saving vignette feedback: {e}")
         return False
+
 # ============================================================================
 # FIXED: display_beta_feedback function with proper styling and profile highlighting
 # ============================================================================
@@ -2023,7 +2138,7 @@ def show_vignette_modal():
     edit = st.session_state.vignette_manager.get_vignette_by_id(st.session_state.editing_vignette_id) if st.session_state.get('editing_vignette_id') else None
     st.session_state.vignette_manager.display_vignette_creator(on_publish=on_vignette_publish, edit_vignette=edit)
     
-    # ADD BETA READER SECTION FOR EDIT MODE - EXACTLY LIKE READ SCREEN
+    # ADD BETA READER SECTION FOR EDIT MODE
     if st.session_state.get('editing_vignette_id') and edit:
         st.divider()
         st.markdown("## 🦋 Beta Reader Feedback for This Vignette")
@@ -2856,10 +2971,10 @@ if st.session_state.get('show_profile_setup', False):
     st.stop()
 
 # ============================================================================
-# MODAL HANDLING - FIXED
+# MODAL HANDLING
 # ============================================================================
-if st.session_state.show_ai_suggestions and st.session_state.current_ai_suggestions:
-    show_ai_suggestions_modal()
+if st.session_state.show_ai_rewrite and st.session_state.current_rewrite_data:
+    show_ai_rewrite_modal()
     st.stop()
 
 if st.session_state.show_privacy_settings:
@@ -2911,6 +3026,7 @@ if st.session_state.show_session_creator:
     show_session_creator()
     if st.session_state.show_session_creator:
         st.stop()
+
 # ============================================================================
 # MAIN HEADER
 # ============================================================================
@@ -2964,7 +3080,7 @@ with st.sidebar:
             if i == st.session_state.current_session: 
                 status = "▶️"
             if st.button(f"{status} Session {sid}: {s['title']}", key=f"sel_sesh_{i}", width='stretch'):
-                st.session_state.update(current_session=i, current_question=0, editing=False, current_question_override=None); 
+                st.session_state.update(current_session=i, current_question=0, editing=False, current_question_override=None, show_ai_rewrite_menu=False); 
                 st.rerun()
     
     st.divider()
@@ -3143,7 +3259,7 @@ with st.sidebar:
                     if st.button(f"Go to Session", key=f"srch_go_{i}_{r['session_id']}", width='stretch'):
                         for idx, s in enumerate(SESSIONS):
                             if s["id"] == r['session_id']:
-                                st.session_state.update(current_session=idx, current_question_override=r['question']); 
+                                st.session_state.update(current_session=idx, current_question_override=r['question'], show_ai_rewrite_menu=False); 
                                 st.rerun()
                     st.divider()
                 if len(results) > 10: 
@@ -3152,10 +3268,9 @@ with st.sidebar:
             st.info("No matches found")
 
 # ============================================================================
-# MAIN CONTENT AREA - FIXED
+# MAIN CONTENT AREA
 # ============================================================================
 
-# ADD THIS CHECK AT THE VERY TOP OF MAIN CONTENT AREA
 # Skip rendering main content if any modal is active
 if (st.session_state.show_vignette_modal or 
     st.session_state.show_vignette_manager or 
@@ -3168,18 +3283,13 @@ if (st.session_state.show_vignette_modal or
     st.session_state.show_privacy_settings or
     st.session_state.show_cover_designer or
     st.session_state.show_profile_setup or
-    st.session_state.show_ai_suggestions):
+    st.session_state.show_ai_rewrite):
     
     # Still show the main header but don't render the Q&A section
     st.markdown(f'<div class="main-header"><img src="{LOGO_URL}" class="logo-img"></div>', unsafe_allow_html=True)
-    st.stop()  # This stops execution here, preventing the Q&A section from rendering
+    st.stop()
 
 # Original main content continues below this point
-if st.session_state.current_session >= len(SESSIONS): 
-    st.session_state.current_session = 0
-
-current_session = SESSIONS[st.session_state.current_session]
-current_session_id = current_session["id"]
 if st.session_state.current_session >= len(SESSIONS): 
     st.session_state.current_session = 0
 
@@ -3235,7 +3345,7 @@ if st.session_state.logged_in:
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
 # ============================================================================
-# QUILL EDITOR - COMPLETE FIXED VERSION (NO AUTO-RERUN)
+# QUILL EDITOR
 # ============================================================================
 editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
 content_key = f"{editor_key}_content"
@@ -3277,15 +3387,18 @@ if content is not None and content != st.session_state[content_key]:
 
 st.markdown("---")
 
-# Save button (separate from editor)
-col1, col2, col3 = st.columns([1, 1, 2])
+# ============================================================================
+# BUTTONS ROW - WITH AI REWRITE
+# ============================================================================
+col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 2])
+
 with col1:
-    if st.button("💾 Save Story", key=f"save_btn_{editor_key}", type="primary", use_container_width=True):
+    if st.button("💾 Save", key=f"save_btn_{editor_key}", type="primary", use_container_width=True):
         current_content = st.session_state[content_key]
         if current_content and current_content.strip() and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>":
             with st.spinner("Saving your story..."):
                 if save_response(current_session_id, current_question_text, current_content):
-                    st.success("✅ Story saved!")
+                    st.success("✅ Saved!")
                     time.sleep(0.5)
                     st.rerun()
                 else: 
@@ -3295,30 +3408,77 @@ with col1:
 
 with col2:
     if existing_answer and existing_answer != "<p>Start writing your story here...</p>":
-        if st.button("🗑️ Delete Story", key=f"del_btn_{editor_key}", use_container_width=True):
+        if st.button("🗑️ Delete", key=f"del_btn_{editor_key}", use_container_width=True):
             if delete_response(current_session_id, current_question_text):
-                # Clear the editor content
                 st.session_state[content_key] = "<p>Start writing your story here...</p>"
-                st.success("✅ Story deleted!")
+                st.success("✅ Deleted!")
                 st.rerun()
     else: 
-        st.button("🗑️ Delete", key=f"del_disabled_{editor_key}", disabled=True, use_container_width=True)
+        st.button("🗑️", key=f"del_disabled_{editor_key}", disabled=True, use_container_width=True)
 
 with col3:
+    # AI Rewrite Button - Only enabled if there's content
+    current_content = st.session_state.get(content_key, "")
+    has_content = current_content and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>"
+    
+    if has_content:
+        if st.button("✨ AI Rewrite", key=f"rewrite_btn_{editor_key}", use_container_width=True):
+            st.session_state.show_ai_rewrite_menu = True
+            st.rerun()
+    else:
+        st.button("✨ AI Rewrite", key=f"rewrite_disabled_{editor_key}", disabled=True, use_container_width=True)
+
+with col4:
+    # Person selector dropdown (appears when AI Rewrite is clicked)
+    if st.session_state.get('show_ai_rewrite_menu', False):
+        person_option = st.selectbox(
+            "Voice:",
+            options=["1st", "2nd", "3rd"],
+            format_func=lambda x: {"1st": "👤 First Person (I)", 
+                                   "2nd": "💬 Second Person (You)", 
+                                   "3rd": "📖 Third Person (He/She)"}[x],
+            key=f"person_select_{editor_key}",
+            label_visibility="collapsed"
+        )
+        
+        if st.button("Go", key=f"go_rewrite_{editor_key}", type="primary", use_container_width=True):
+            with st.spinner(f"Rewriting in {person_option} person using your profile..."):
+                current_content = st.session_state[content_key]
+                result = ai_rewrite_answer(
+                    current_content, 
+                    person_option, 
+                    current_question_text, 
+                    current_session['title']
+                )
+                
+                if result.get('success'):
+                    st.session_state.current_rewrite_data = result
+                    st.session_state.show_ai_rewrite = True
+                    st.session_state.show_ai_rewrite_menu = False
+                    st.rerun()
+                else:
+                    st.error(result.get('error', 'Failed to rewrite'))
+    else:
+        # Placeholder to maintain column layout
+        st.markdown("")
+
+with col5:
     nav1, nav2 = st.columns(2)
     with nav1: 
         prev_disabled = st.session_state.current_question == 0
-        if st.button("← Previous Topic", disabled=prev_disabled, key=f"prev_{editor_key}", use_container_width=True):
+        if st.button("← Previous", disabled=prev_disabled, key=f"prev_{editor_key}", use_container_width=True):
             if not prev_disabled:
                 st.session_state.current_question -= 1
                 st.session_state.current_question_override = None
+                st.session_state.show_ai_rewrite_menu = False  # Close menu when navigating
                 st.rerun()
     with nav2:
         next_disabled = st.session_state.current_question >= len(current_session["questions"]) - 1
-        if st.button("Next Topic →", disabled=next_disabled, key=f"next_{editor_key}", use_container_width=True):
+        if st.button("Next →", disabled=next_disabled, key=f"next_{editor_key}", use_container_width=True):
             if not next_disabled:
                 st.session_state.current_question += 1
                 st.session_state.current_question_override = None
+                st.session_state.show_ai_rewrite_menu = False  # Close menu when navigating
                 st.rerun()
 
 st.divider()
@@ -3394,7 +3554,7 @@ if st.session_state.logged_in and st.session_state.image_handler:
     st.markdown("---")
 
 # ============================================================================
-# PREVIEW SECTION - FIXED
+# PREVIEW SECTION
 # ============================================================================
 current_content = st.session_state.get(content_key, "")
 if current_content and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>":
@@ -3404,7 +3564,7 @@ if current_content and current_content != "<p><br></p>" and current_content != "
         st.markdown("---")
 
 # ============================================================================
-# FIXED: BETA READER FEEDBACK SECTION
+# BETA READER FEEDBACK SECTION
 # ============================================================================
 st.subheader("🦋 Beta Reader Feedback")
 
@@ -3587,9 +3747,5 @@ if st.session_state.user_account:
     st.caption(f"Tell My Story Timeline • 👤 {profile['first_name']} {profile['last_name']} • 📅 Account Age: {age} days • 📚 Bank: {st.session_state.get('current_bank_name', 'None')}")
 else: 
     st.caption(f"Tell My Story Timeline • User: {st.session_state.user_id}")
-
-
-
-
 
 
