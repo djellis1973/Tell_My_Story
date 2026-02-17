@@ -12,18 +12,6 @@ import openai
 
 from streamlit_quill import st_quill
 
-def display_vignette_creator(self, on_publish=None, edit_vignette=None):
-    # TRICK: If no edit_vignette, create a fake one that looks like an existing vignette
-    if not edit_vignette:
-        import time
-        edit_vignette = {
-            "id": f"temp_{int(time.time())}",
-            "title": "",
-            "content": "<p>Write your story here...</p>",
-            "theme": self.standard_themes[0] if self.standard_themes else "Life Lesson",
-            "mood": "Reflective",
-            "is_draft": True
-        }
 class VignetteManager:
     def __init__(self, user_id):
         self.user_id = user_id
@@ -300,32 +288,15 @@ class VignetteManager:
         editor_key = f"quill_vignette_{vignette_id}"
         content_key = f"{editor_key}_content"
         
-        # Add a version counter for this editor
-        version_key = f"{editor_key}_version"
-        if version_key not in st.session_state:
-            st.session_state[version_key] = 0
-        
-        # IMPORTANT: Initialize import state for ALL vignettes
+        # Force import state to exist for ALL vignettes (including new ones)
         import_key = f"import_{editor_key}"
         if import_key not in st.session_state:
             st.session_state[import_key] = False
         
-        # FOR NEW VIGNETTES: Clear any leftover state
-        if not edit_vignette:
-            # Check if this is a brand new vignette
-            if f"{base_key}_initialized" not in st.session_state:
-                # Reset import state for new vignette
-                st.session_state[import_key] = False
-                # Clear any pending import data
-                if f"{import_key}_pending" in st.session_state:
-                    del st.session_state[f"{import_key}_pending"]
-                if f"{import_key}_show_options" in st.session_state:
-                    del st.session_state[f"{import_key}_show_options"]
-                # Clear content
-                if content_key in st.session_state:
-                    del st.session_state[content_key]
-                # Set initialized flag
-                st.session_state[f"{base_key}_initialized"] = True
+        # Add a version counter for this editor
+        version_key = f"{editor_key}_version"
+        if version_key not in st.session_state:
+            st.session_state[version_key] = 0
         
         # Title input
         title = st.text_input(
@@ -495,7 +466,7 @@ class VignetteManager:
                 st.button("✨ AI Rewrite", key=f"{base_key}_ai_disabled", disabled=True, use_container_width=True)
         
         with col5:
-            # IMPORT BUTTON - WORKS ON NEW VIGNETTES
+            # IMPORT BUTTON - Works on both new and existing vignettes
             show_import = st.session_state.get(import_key, False)
             button_label = "📂 Close Import" if show_import else "📂 Import File"
             
@@ -539,10 +510,9 @@ class VignetteManager:
             with nav2:
                 if st.button("❌ Cancel", key=f"{base_key}_cancel", use_container_width=True):
                     # Clear all session state for this vignette
-                    keys_to_clear = [content_key, version_key, spell_result_key, import_key,
+                    keys_to_clear = [content_key, version_key, spell_result_key,
                                     f"{base_key}_ai_result", f"{base_key}_show_ai_menu", 
-                                    f"{base_key}_show_preview", f"{import_key}_pending", 
-                                    f"{import_key}_show_options"]
+                                    f"{base_key}_show_preview"]
                     for key in keys_to_clear:
                         if key in st.session_state:
                             try:
