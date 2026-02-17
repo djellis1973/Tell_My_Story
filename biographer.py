@@ -3384,20 +3384,15 @@ with col3:
                     corrected = auto_correct_text(text_only)
                     
                     if corrected and corrected != text_only:
-                        # Get the current HTML structure
-                        import html
-                        escaped_text = html.escape(corrected)
-                        
                         # Check if the current content has paragraph tags
                         if current_content.startswith('<p>'):
-                            new_content = f'<p>{escaped_text}</p>'
+                            new_content = f'<p>{corrected}</p>'
                         else:
-                            new_content = f'<p>{escaped_text}</p>'
+                            new_content = f'<p>{corrected}</p>'
                         
                         # Update session state
                         st.session_state[content_key] = new_content
                         
-                        # Force a rerun to show the updated content
                         st.success("✅ Spelling and grammar corrected!")
                         time.sleep(1)
                         st.rerun()
@@ -3409,7 +3404,6 @@ with col3:
                     st.warning("Need at least 3 words to check")
     else:
         st.button("🔍 Spell Check", key=f"spell_disabled_{editor_key}", disabled=True, use_container_width=True)
-
 with col4:
     # AI REWRITE BUTTON
     if has_content:
