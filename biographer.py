@@ -3379,34 +3379,23 @@ with col3:
             with st.spinner("Checking spelling and grammar..."):
                 # Extract text without HTML
                 text_only = re.sub(r'<[^>]+>', '', current_content)
-                st.write(f"DEBUG - Original text: {text_only}")
+                st.write(f"DEBUG - Original: {text_only}")
                 
                 if text_only and len(text_only.split()) >= 3:
                     corrected = auto_correct_text(text_only)
-                    st.write(f"DEBUG - Corrected text: {corrected}")
+                    st.write(f"DEBUG - Corrected: {corrected}")
                     
                     if corrected and corrected != text_only:
-                        # Create new content with paragraph tags
-                        new_content = f"<p>{corrected}</p>"
-                        st.write(f"DEBUG - New content: {new_content}")
-                        
-                        # Update session state
-                        st.session_state[content_key] = new_content
-                        st.write(f"DEBUG - Session state updated")
-                        
-                        # Save to database
-                        save_result = save_response(current_session_id, current_question_text, new_content)
-                        st.write(f"DEBUG - Save result: {save_result}")
+                        # SIMPLE - just set the session state and rerun
+                        st.session_state[content_key] = corrected
+                        st.write(f"DEBUG - Set to: {corrected}")
                         
                         st.success("✅ Spelling and grammar corrected!")
-                        time.sleep(1)
                         st.rerun()
                     elif corrected:
                         st.info("✓ No spelling or grammar issues found!")
                     else:
                         st.error("Spell check failed")
-                else:
-                    st.warning("Need at least 3 words to check")
     else:
         st.button("🔍 Spell Check", key=f"spell_disabled_{editor_key}", disabled=True, use_container_width=True)
 with col4:
