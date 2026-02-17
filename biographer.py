@@ -2157,7 +2157,7 @@ def show_vignette_modal():
             vignette_content = edit.get('content', '')
             clean_vignette = re.sub(r'<[^>]+>', '', vignette_content) if vignette_content else ""
             
-            if clean_vignette and len(clean_vignette.split()) >= 5:
+            if clean_vignette and len(clean_vignette.split()) >= 3:
                 col1, col2, col3 = st.columns(3)
                 
                 with col1:
@@ -2166,18 +2166,57 @@ def show_vignette_modal():
                         with st.spinner("Checking spelling and grammar..."):
                             corrected = auto_correct_text(clean_vignette)
                             if corrected and corrected != clean_vignette:
-                                # Wrap in paragraph tags if not present
-                                if not corrected.startswith('<p>'):
-                                    corrected = f'<p>{corrected}</p>'
+                                # Preserve HTML structure
+                                import html
+                                escaped_text = html.escape(corrected)
+                                
+                                # Check if content has HTML tags
+                                if vignette_content.startswith('<p>') and vignette_content.endswith('</p>'):
+                                    new_content = f'<p>{escaped_text}</p>'
+                                else:
+                                    new_content = f'<p>{escaped_text}</p>'
+                                
                                 # Update the vignette content
-                                edit['content'] = corrected
-                                # Save to vignette manager
-                                if st.session_state.vignette_manager.save_vignette(edit):
+                                edit['content'] = new_content
+                                
+                                # Try to save using available methods
+                                saved = False
+                                
+                                # Method 1: Try update_vignette
+                                if hasattr(st.session_state.vignette_manager, 'update_vignette'):
+                                    saved = st.session_state.vignette_manager.update_vignette(edit['id'], edit)
+                                
+                                # Method 2: Try update
+                                elif hasattr(st.session_state.vignette_manager, 'update'):
+                                    saved = st.session_state.vignette_manager.update(edit)
+                                
+                                # Method 3: If we have the vignettes list, update it directly
+                                else:
+                                    try:
+                                        # Get all vignettes
+                                        vignettes = st.session_state.vignette_manager.get_all_vignettes() if hasattr(st.session_state.vignette_manager, 'get_all_vignettes') else []
+                                        
+                                        # Find and update this vignette
+                                        for i, v in enumerate(vignettes):
+                                            if v.get('id') == edit['id']:
+                                                vignettes[i] = edit
+                                                break
+                                        
+                                        # Save back if there's a save method
+                                        if hasattr(st.session_state.vignette_manager, 'save_all_vignettes'):
+                                            saved = st.session_state.vignette_manager.save_all_vignettes(vignettes)
+                                        elif hasattr(st.session_state.vignette_manager, 'save_vignettes'):
+                                            saved = st.session_state.vignette_manager.save_vignettes(vignettes)
+                                    except:
+                                        saved = False
+                                
+                                if saved:
                                     st.success("✅ Spelling and grammar corrected!")
                                     time.sleep(1)
                                     st.rerun()
                                 else:
-                                    st.error("Failed to save corrected version")
+                                    st.warning("⚠️ Could not auto-save. Please copy the corrected text and paste it back:")
+                                    st.text_area("Corrected text:", corrected, height=150)
                             elif corrected:
                                 st.info("✓ No spelling or grammar issues found!")
                             else:
@@ -2224,7 +2263,7 @@ def show_vignette_modal():
                     st.markdown("---")
                     st.markdown(f"**Current word count:** {len(clean_vignette.split())}")
             else:
-                st.info("Write at least 5 words to use AI writing tools.")
+                st.info("Write at least 3 words to use AI writing tools.")
         
         with tab_beta:
             st.markdown("## 🦋 Beta Reader Feedback")
@@ -2319,177 +2358,6 @@ def show_vignette_modal():
                             st.markdown(fb['feedback'])
     
     st.markdown('</div>', unsafe_allow_html=True)
-
-def show_vignette_manager():
-    if not VignetteManager: 
-        st.error("Vignette module not available"); 
-        st.session_state.show_vignette_manager = False; 
-        return
-    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    if st.button("←", key="vign_mgr_back"): 
-        st.session_state.show_vignette_manager = False; 
-        st.rerun()
-    st.title("📚 Your Vignettes")
-    if 'vignette_manager' not in st.session_state: 
-        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
-    filter_map = {"All Stories": "all", "Published": "published", "Drafts": "drafts"}
-    filter_option = st.radio("Show:", ["All Stories", "Published", "Drafts"], horizontal=True, key="vign_filter")
-    st.session_state.vignette_manager.display_vignette_gallery(
-        filter_by=filter_map.get(filter_option, "all"),
-        on_select=on_vignette_select, 
-        on_edit=on_vignette_edit, 
-        on_delete=on_vignette_delete
-    )
-    st.divider()
-    if st.button("➕ Create New Vignette", type="primary", width='stretch'):
-        st.session_state.show_vignette_manager = False; 
-        st.session_state.show_vignette_modal = True; 
-        st.session_state.editing_vignette_id = None; 
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-def show_vignette_detail():
-    if not VignetteManager or not st.session_state.get('selected_vignette_id'): 
-        st.session_state.show_vignette_detail = False
-        return
-    
-    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([6, 1])
-    with col1:
-        st.title("📖 Read Vignette")
-    with col2:
-        if st.button("✕", key="close_vignette_detail"):
-            st.session_state.show_vignette_detail = False
-            st.session_state.selected_vignette_id = None
-            st.rerun()
-    
-    if 'vignette_manager' not in st.session_state: 
-        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
-    
-    vignette = st.session_state.vignette_manager.get_vignette_by_id(st.session_state.selected_vignette_id)
-    if not vignette: 
-        st.error("Vignette not found")
-        st.session_state.show_vignette_detail = False
-        return
-    
-    # Display the vignette
-    st.session_state.vignette_manager.display_full_vignette(
-        st.session_state.selected_vignette_id,
-        on_back=lambda: st.session_state.update(show_vignette_detail=False, selected_vignette_id=None),
-        on_edit=on_vignette_edit
-    )
-    
-    st.divider()
-    
-    # Beta Reader section
-    st.markdown("## 🦋 Beta Reader Feedback for This Vignette")
-    
-    tab1, tab2 = st.tabs(["📝 Get Feedback", "📚 Feedback History"])
-    
-    with tab1:
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            fb_type = st.selectbox(
-                "Feedback Type", 
-                ["comprehensive", "concise", "developmental"], 
-                key=f"beta_vignette_type_{vignette['id']}"
-            )
-        with col2:
-            if st.button("🦋 Get Beta Read", key=f"beta_vignette_btn_{vignette['id']}", type="primary", use_container_width=True):
-                with st.spinner("Beta Reader is analyzing your vignette with profile context..."):
-                    if beta_reader:
-                        vignette_text = vignette.get('content', '')
-                        text_only = re.sub(r'<[^>]+>', '', vignette_text)
-                        if text_only and len(text_only.split()) > 50:
-                            fb = generate_beta_reader_feedback(
-                                f"Vignette: {vignette['title']}", 
-                                vignette_text,
-                                fb_type
-                            )
-                            if "error" not in fb: 
-                                st.session_state[f"beta_vignette_{vignette['id']}"] = fb
-                                st.rerun()
-                            else: 
-                                st.error(f"Failed: {fb['error']}")
-                        else:
-                            st.warning("Vignette too short for feedback (minimum 50 words)")
-                    else:
-                        st.error("Beta reader not available")
-        
-        if f"beta_vignette_{vignette['id']}" in st.session_state:
-            fb = st.session_state[f"beta_vignette_{vignette['id']}"]
-            st.markdown("---")
-            st.markdown("### 📋 Beta Reader Results")
-            
-            # Show what profile information was used
-            if fb.get('profile_sections_used'):
-                with st.expander("📋 **PROFILE INFORMATION ACCESSED**", expanded=True):
-                    st.markdown("The Beta Reader used these profile sections to personalize this feedback:")
-                    cols = st.columns(3)
-                    for i, section in enumerate(fb['profile_sections_used']):
-                        cols[i % 3].markdown(f"✅ **{section}**")
-            
-            if st.button("💾 Save to History", key=f"save_vignette_fb_{vignette['id']}"):
-                if save_vignette_beta_feedback(st.session_state.user_id, vignette['id'], fb, vignette['title']):
-                    st.success("✅ Saved!")
-                    st.rerun()
-            
-            st.markdown("---")
-            
-            # Display feedback with profile highlights
-            if 'feedback' in fb and fb['feedback']:
-                feedback_text = fb['feedback']
-                parts = re.split(r'(\[PROFILE:.*?\])', feedback_text)
-                formatted_feedback = ""
-                for part in parts:
-                    if part.startswith('[PROFILE:') and part.endswith(']'):
-                        formatted_feedback += f'<span style="background-color: #e8f4fd; color: #0366d6; font-weight: bold; padding: 2px 6px; border-radius: 4px; border-left: 3px solid #0366d6;">{part}</span>'
-                    else:
-                        formatted_feedback += part
-                st.markdown(formatted_feedback, unsafe_allow_html=True)
-            else:
-                if 'summary' in fb:
-                    st.info(fb['summary'])
-                if 'strengths' in fb:
-                    for s in fb['strengths']:
-                        st.markdown(f"✅ {s}")
-                if 'areas_for_improvement' in fb:
-                    for a in fb['areas_for_improvement']:
-                        st.markdown(f"📝 {a}")
-    
-    with tab2:
-        st.markdown("### Saved Feedback")
-        user_data = load_user_data(st.session_state.user_id) if st.session_state.user_id else {}
-        vignette_feedback = user_data.get("vignette_beta_feedback", {})
-        this_vignette_feedback = vignette_feedback.get(str(vignette['id']), [])
-        
-        if not this_vignette_feedback:
-            st.info("No saved feedback yet")
-        else:
-            for i, fb in enumerate(this_vignette_feedback):
-                with st.expander(f"Feedback {i+1}"):
-                    if st.button(f"Delete", key=f"del_vignette_fb_{i}"):
-                        this_vignette_feedback.pop(i)
-                        user_data["vignette_beta_feedback"] = vignette_feedback
-                        save_user_data(st.session_state.user_id, user_data.get("responses", {}))
-                        st.rerun()
-                    if 'feedback' in fb:
-                        st.markdown(fb['feedback'])
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
-
-def switch_to_vignette(vignette_topic, content=""):
-    st.session_state.current_question_override = f"Vignette: {vignette_topic}"
-    if content:
-        save_response(st.session_state.current_question_bank[st.session_state.current_session]["id"], 
-                     f"Vignette: {vignette_topic}", content)
-    st.rerun()
-
-def switch_to_custom_topic(topic_text):
-    st.session_state.current_question_override = topic_text
-    st.rerun()
 
 # ============================================================================
 # TOPIC BROWSER & SESSION MANAGER
