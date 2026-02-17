@@ -3386,8 +3386,9 @@ with col3:
                     st.write(f"DEBUG - Corrected: {corrected}")
                     
                     if corrected and corrected != text_only:
-                        # SIMPLE - just set the session state and rerun
+                        # Update both the content key AND the editor's internal state
                         st.session_state[content_key] = corrected
+                        st.session_state[editor_component_key] = corrected
                         st.write(f"DEBUG - Set to: {corrected}")
                         
                         st.success("✅ Spelling and grammar corrected!")
@@ -3398,6 +3399,7 @@ with col3:
                         st.error("Spell check failed")
     else:
         st.button("🔍 Spell Check", key=f"spell_disabled_{editor_key}", disabled=True, use_container_width=True)
+   
 with col4:
     # AI REWRITE BUTTON
     if has_content:
