@@ -3414,12 +3414,6 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# SPELLCHECK BUTTON - Compact version (remove the heading section above)
-# ============================================================================
-# The spellcheck functionality is now integrated into the button row below
-# No need for a separate section with heading
-
-# ============================================================================
 # BUTTONS ROW - WITH SPELLCHECK AND AI REWRITE
 # ============================================================================
 col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 2])
@@ -3453,13 +3447,13 @@ with col2:
                 st.success("✅ Deleted!")
                 st.rerun()
     else: 
-        st.button("🗑️", key=f"del_disabled_{editor_base_key}", disabled=True, use_container_width=True)
+        st.button("🗑️ Delete", key=f"del_disabled_{editor_base_key}", disabled=True, use_container_width=True)
 
 with col3:
     # Spellcheck Button
     if has_content and not showing_results:
-        if st.button("🔍 Spell", key=f"spell_{editor_base_key}", use_container_width=True):
-            with st.spinner("Checking..."):
+        if st.button("🔍 Spell Check", key=f"spell_{editor_base_key}", use_container_width=True):
+            with st.spinner("Checking spelling and grammar..."):
                 text_only = re.sub(r'<[^>]+>', '', current_content)
                 if len(text_only.split()) >= 3:
                     corrected = auto_correct_text(text_only)
@@ -3471,23 +3465,23 @@ with col3:
                         }
                     else:
                         st.session_state[spell_result_key] = {
-                            "message": "✅ No issues found!",
+                            "message": "✅ No spelling or grammar issues found!",
                             "show": True
                         }
                     st.rerun()
                 else:
-                    st.warning("Text too short")
+                    st.warning("Text too short for spell check (minimum 3 words)")
     else:
-        st.button("🔍 Spell", key=f"spell_disabled_{editor_base_key}", disabled=True, use_container_width=True)
+        st.button("🔍 Spell Check", key=f"spell_disabled_{editor_base_key}", disabled=True, use_container_width=True)
 
 with col4:
     # AI Rewrite Button
     if has_content:
-        if st.button("✨ Rewrite", key=f"rewrite_btn_{editor_base_key}", use_container_width=True):
+        if st.button("✨ AI Rewrite", key=f"rewrite_btn_{editor_base_key}", use_container_width=True):
             st.session_state.show_ai_rewrite_menu = True
             st.rerun()
     else:
-        st.button("✨ Rewrite", key=f"rewrite_disabled_{editor_base_key}", disabled=True, use_container_width=True)
+        st.button("✨ AI Rewrite", key=f"rewrite_disabled_{editor_base_key}", disabled=True, use_container_width=True)
 
 with col5:
     # Person selector dropdown (appears when AI Rewrite is clicked)
@@ -3495,13 +3489,13 @@ with col5:
         person_option = st.selectbox(
             "Voice:",
             options=["1st", "2nd", "3rd"],
-            format_func=lambda x: {"1st": "👤 1st", "2nd": "💬 2nd", "3rd": "📖 3rd"}[x],
+            format_func=lambda x: {"1st": "👤 First Person", "2nd": "💬 Second Person", "3rd": "📖 Third Person"}[x],
             key=f"person_select_{editor_base_key}",
             label_visibility="collapsed"
         )
         
         if st.button("Go", key=f"go_rewrite_{editor_base_key}", type="primary", use_container_width=True):
-            with st.spinner(f"Rewriting..."):
+            with st.spinner(f"Rewriting in {person_option} person..."):
                 current_content = st.session_state[content_key]
                 result = ai_rewrite_answer(
                     current_content, 
@@ -3525,7 +3519,7 @@ with col6:
     nav1, nav2 = st.columns(2)
     with nav1: 
         prev_disabled = st.session_state.current_question == 0
-        if st.button("←", disabled=prev_disabled, key=f"prev_{editor_base_key}", use_container_width=True):
+        if st.button("← Previous", disabled=prev_disabled, key=f"prev_{editor_base_key}", use_container_width=True):
             if not prev_disabled:
                 st.session_state.current_question -= 1
                 st.session_state.current_question_override = None
@@ -3533,7 +3527,7 @@ with col6:
                 st.rerun()
     with nav2:
         next_disabled = st.session_state.current_question >= len(current_session["questions"]) - 1
-        if st.button("→", disabled=next_disabled, key=f"next_{editor_base_key}", use_container_width=True):
+        if st.button("Next →", disabled=next_disabled, key=f"next_{editor_base_key}", use_container_width=True):
             if not next_disabled:
                 st.session_state.current_question += 1
                 st.session_state.current_question_override = None
