@@ -3345,7 +3345,7 @@ if st.session_state.logged_in:
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
 # ============================================================================
-# QUILL EDITOR - WITH DEBUGGING AND UNIQUE KEYS
+# QUILL EDITOR - WITH STABLE KEYS (FIXES FLASHING)
 # ============================================================================
 import logging
 
@@ -3373,21 +3373,26 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Create a truly unique key using timestamp to avoid scrolling issues
-import time
-unique_suffix = int(time.time() * 1000) % 10000  # Use milliseconds mod 10000 for uniqueness
+# Create a STABLE key that doesn't change on reruns
+# Use the question text and session ID to create a unique but stable identifier
+question_text_safe = "".join(c for c in current_question_text if c.isalnum() or c.isspace()).replace(" ", "_")[:30]
+editor_component_key = f"quill_editor_{current_session_id}_{question_text_safe}"
 
-question_text_safe = "".join(c for c in current_question_text if c.isalnum() or c.isspace()).replace(" ", "_")[:20]
-editor_component_key = f"quill_editor_{current_session_id}_{question_text_safe}_{unique_suffix}"
+# IMPORTANT: Store this key in session state so it persists
+if f"editor_key_{editor_base_key}" not in st.session_state:
+    st.session_state[f"editor_key_{editor_base_key}"] = editor_component_key
+
+# Use the stored key
+stable_editor_key = st.session_state[f"editor_key_{editor_base_key}"]
 
 # Debug: Print the key being used (remove this in production)
-print(f"Creating Quill editor with key: {editor_component_key}")
+print(f"Creating Quill editor with stable key: {stable_editor_key}")
 
-# Display the editor
+# Display the editor with the stable key
 try:
     content = st_quill(
         value=st.session_state[content_key],
-        key=editor_component_key,
+        key=stable_editor_key,  # Use the stable key stored in session state
         placeholder="Start writing your story here...",
         html=True
     )
