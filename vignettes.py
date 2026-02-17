@@ -406,34 +406,31 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                     st.session_state.show_vignette_manager = True
                     st.rerun()
         
-        with col3:
+                with col3:
             # Spellcheck Button
             if has_content and not showing_results:
                 if st.button("🔍 Spell Check", key=f"{base_key}_spell", use_container_width=True):
                     with st.spinner("Checking spelling and grammar..."):
                         text_only = re.sub(r'<[^>]+>', '', current_content)
                         if len(text_only.split()) >= 3:
-                            # Simple spell check function (copied from biographer.py to avoid circular import)
-                            def simple_spell_check(text):
-                                if not text: 
-                                    return text
-                                try:
-                                    import openai
-                                    client = openai.OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY")))
-                                    resp = client.chat.completions.create(
-                                        model="gpt-4o-mini",
-                                        messages=[
-                                            {"role": "system", "content": "Fix spelling and grammar. Return only corrected text."},
-                                            {"role": "user", "content": text}
-                                        ],
-                                        max_tokens=len(text) + 100, 
-                                        temperature=0.1
-                                    )
-                                    return resp.choices[0].message.content
-                                except: 
-                                    return text
+                            # Simple spell check using OpenAI directly
+                            try:
+                                import openai
+                                client = openai.OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY")))
+                                resp = client.chat.completions.create(
+                                    model="gpt-4o-mini",
+                                    messages=[
+                                        {"role": "system", "content": "Fix spelling and grammar. Return only corrected text."},
+                                        {"role": "user", "content": text_only}
+                                    ],
+                                    max_tokens=len(text_only) + 100, 
+                                    temperature=0.1
+                                )
+                                corrected = resp.choices[0].message.content
+                            except Exception as e:
+                                st.error(f"Spell check failed: {e}")
+                                st.rerun()
                             
-                            corrected = simple_spell_check(text_only)
                             if corrected and corrected != text_only:
                                 st.session_state[spell_result_key] = {
                                     "original": text_only,
