@@ -3388,10 +3388,12 @@ with col3:
                     if corrected and corrected != text_only:
                         # Update session state
                         st.session_state[content_key] = corrected
-                        st.write(f"DEBUG - Set to: {corrected}")
                         
-                        # Force the Quill editor to update by using a different key approach
-                        # Just update the content key and rely on the rerun
+                        # Save to database
+                        save_response(current_session_id, current_question_text, corrected)
+                        
+                        # Force a full page rerun with a timestamp to force Quill to refresh
+                        st.session_state['spell_check_timestamp'] = time.time()
                         
                         st.success("✅ Spelling and grammar corrected!")
                         st.rerun()
