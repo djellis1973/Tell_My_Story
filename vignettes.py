@@ -1,4 +1,4 @@
-# vignettes.py - MATCHING BIOGRAPHER.PY PATTERN (NO CONSTANT REFRESHES)
+# vignettes.py - MATCHING BIOGRAPHER.PY EXACT PATTERN
 import streamlit as st
 import json
 from datetime import datetime
@@ -110,9 +110,9 @@ class VignetteManager:
         return None
     
     def display_vignette_creator(self, on_publish=None, edit_vignette=None):
-        """Display the vignette creation form matching biographer.py pattern"""
+        """Display the vignette creation form matching biographer.py EXACT pattern"""
         
-        # Create unique keys for this vignette
+        # Create unique keys for this vignette - MATCHING BIOGRAPHER.PY PATTERN
         if edit_vignette:
             vignette_id = edit_vignette['id']
             base_key = f"vignette_{vignette_id}"
@@ -120,7 +120,9 @@ class VignetteManager:
             vignette_id = f"new_{int(time.time())}"
             base_key = f"vignette_new"
         
-        content_key = f"{base_key}_content"
+        # Editor key and content key - EXACTLY like biographer.py
+        editor_key = f"quill_vignette_{vignette_id}"
+        content_key = f"{editor_key}_content"
         
         # Title input
         title = st.text_input(
@@ -166,8 +168,13 @@ class VignetteManager:
         if content_key not in st.session_state:
             st.session_state[content_key] = default_content
         
-        # Editor component key - FIXED: no timestamp to prevent constant refreshes
-        editor_component_key = f"quill_editor_{vignette_id}"
+        # Timestamp for spell check refresh - EXACTLY like biographer.py
+        spell_check_key = f"{base_key}_spell_timestamp"
+        if spell_check_key not in st.session_state:
+            st.session_state[spell_check_key] = 0
+        
+        # Editor component key with timestamp - EXACTLY like biographer.py
+        editor_component_key = f"quill_editor_{vignette_id}_{st.session_state[spell_check_key]}"
         
         st.markdown("### 📝 Your Story")
         st.markdown("""
@@ -265,7 +272,7 @@ class VignetteManager:
                         st.session_state.draft_success = True
                     
                     # Clean up session state
-                    for key in [content_key, temp_images_key]:
+                    for key in [content_key, temp_images_key, spell_check_key]:
                         if key in st.session_state:
                             del st.session_state[key]
                     
@@ -299,7 +306,7 @@ class VignetteManager:
                         on_publish(vignette_data)
                     
                     # Clean up session state
-                    for key in [content_key, temp_images_key]:
+                    for key in [content_key, temp_images_key, spell_check_key]:
                         if key in st.session_state:
                             del st.session_state[key]
                     
@@ -315,7 +322,7 @@ class VignetteManager:
         with col4:
             if st.button("❌ Cancel", use_container_width=True, key=f"{base_key}_cancel"):
                 # Clean up session state
-                for key in [content_key, temp_images_key]:
+                for key in [content_key, temp_images_key, spell_check_key]:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.session_state.show_vignette_modal = False
