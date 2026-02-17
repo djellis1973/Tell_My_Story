@@ -1,4 +1,4 @@
-# vignettes.py - MATCHING BIOGRAPHER.PY PATTERN
+# vignettes.py - MATCHING BIOGRAPHER.PY PATTERN (NO CONSTANT REFRESHES)
 import streamlit as st
 import json
 from datetime import datetime
@@ -121,7 +121,6 @@ class VignetteManager:
             base_key = f"vignette_new"
         
         content_key = f"{base_key}_content"
-        timestamp_key = f"{base_key}_timestamp"
         
         # Title input
         title = st.text_input(
@@ -167,12 +166,8 @@ class VignetteManager:
         if content_key not in st.session_state:
             st.session_state[content_key] = default_content
         
-        # Use timestamp to force refresh when needed
-        if timestamp_key not in st.session_state:
-            st.session_state[timestamp_key] = 0
-        
-        # Editor component key - matches biographer.py pattern
-        editor_component_key = f"quill_editor_{vignette_id}_{st.session_state[timestamp_key]}"
+        # Editor component key - FIXED: no timestamp to prevent constant refreshes
+        editor_component_key = f"quill_editor_{vignette_id}"
         
         st.markdown("### 📝 Your Story")
         st.markdown("""
@@ -270,7 +265,7 @@ class VignetteManager:
                         st.session_state.draft_success = True
                     
                     # Clean up session state
-                    for key in [content_key, timestamp_key, temp_images_key]:
+                    for key in [content_key, temp_images_key]:
                         if key in st.session_state:
                             del st.session_state[key]
                     
@@ -304,7 +299,7 @@ class VignetteManager:
                         on_publish(vignette_data)
                     
                     # Clean up session state
-                    for key in [content_key, timestamp_key, temp_images_key]:
+                    for key in [content_key, temp_images_key]:
                         if key in st.session_state:
                             del st.session_state[key]
                     
@@ -320,7 +315,7 @@ class VignetteManager:
         with col4:
             if st.button("❌ Cancel", use_container_width=True, key=f"{base_key}_cancel"):
                 # Clean up session state
-                for key in [content_key, timestamp_key, temp_images_key]:
+                for key in [content_key, temp_images_key]:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.session_state.show_vignette_modal = False
