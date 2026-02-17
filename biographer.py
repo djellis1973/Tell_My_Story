@@ -3386,10 +3386,12 @@ with col3:
                     st.write(f"DEBUG - Corrected: {corrected}")
                     
                     if corrected and corrected != text_only:
-                        # Update both the content key AND the editor's internal state
+                        # Update session state
                         st.session_state[content_key] = corrected
-                        st.session_state[editor_component_key] = corrected
                         st.write(f"DEBUG - Set to: {corrected}")
+                        
+                        # Force the Quill editor to update by using a different key approach
+                        # Just update the content key and rely on the rerun
                         
                         st.success("✅ Spelling and grammar corrected!")
                         st.rerun()
