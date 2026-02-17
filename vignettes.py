@@ -12,6 +12,18 @@ import openai
 
 from streamlit_quill import st_quill
 
+def display_vignette_creator(self, on_publish=None, edit_vignette=None):
+    # TRICK: If no edit_vignette, create a fake one that looks like an existing vignette
+    if not edit_vignette:
+        import time
+        edit_vignette = {
+            "id": f"temp_{int(time.time())}",
+            "title": "",
+            "content": "<p>Write your story here...</p>",
+            "theme": self.standard_themes[0] if self.standard_themes else "Life Lesson",
+            "mood": "Reflective",
+            "is_draft": True
+        }
 class VignetteManager:
     def __init__(self, user_id):
         self.user_id = user_id
