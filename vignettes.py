@@ -1,4 +1,4 @@
-# vignettes.py - COMPLETE WORKING VERSION WITH SPELLCHECK AND AI REWRITE
+# vignettes.py - COMPLETE WORKING VERSION WITH FILE IMPORT
 import streamlit as st
 import json
 from datetime import datetime
@@ -267,6 +267,192 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
         except Exception as e:
             return {"error": str(e)}
     
+    # ============================================================================
+    # FILE IMPORT FUNCTION FOR VIGNETTES
+    # ============================================================================
+    def import_text_file(self, uploaded_file):
+        """Import text from common document formats into vignette"""
+        try:
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+            file_content = ""
+            
+            # Get file size in MB
+            file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+            
+            # Show what's being imported
+            st.info(f"📄 **Importing:** {uploaded_file.name}")
+            st.caption(f"Size: {file_size_mb:.1f}MB • Format: .{file_extension}")
+            
+            # ============================================
+            # SUPPORTED FORMATS
+            # ============================================
+            
+            # 1. PLAIN TEXT - Universal format
+            if file_extension == 'txt':
+                file_content = uploaded_file.read().decode('utf-8', errors='ignore')
+                st.success(f"✅ Plain text file loaded ({len(file_content.split())} words)")
+            
+            # 2. MICROSOFT WORD - Critical for business docs, interviews, transcripts
+            elif file_extension == 'docx':
+                try:
+                    import io
+                    from docx import Document
+                    docx_bytes = io.BytesIO(uploaded_file.getvalue())
+                    doc = Document(docx_bytes)
+                    
+                    # Extract paragraphs
+                    paragraphs = []
+                    for para in doc.paragraphs:
+                        if para.text.strip():
+                            paragraphs.append(para.text)
+                    
+                    # Extract from tables (useful for interview transcripts)
+                    for table in doc.tables:
+                        for row in table.rows:
+                            row_text = ' '.join([cell.text for cell in row.cells if cell.text.strip()])
+                            if row_text:
+                                paragraphs.append(row_text)
+                    
+                    file_content = '\n\n'.join(paragraphs)
+                    st.success(f"✅ Word document loaded ({len(paragraphs)} paragraphs, {len(file_content.split())} words)")
+                except ImportError:
+                    st.error("📦 Missing dependency: Please install python-docx")
+                    st.code("pip install python-docx")
+                    return None
+                except Exception as e:
+                    st.error(f"Error reading Word document: {str(e)}")
+                    return None
+            
+            # 3. RICH TEXT FORMAT - Sometimes used by transcription services
+            elif file_extension == 'rtf':
+                try:
+                    from striprtf.striprtf import rtf_to_text
+                    rtf_content = uploaded_file.read().decode('utf-8', errors='ignore')
+                    file_content = rtf_to_text(rtf_content)
+                    st.success(f"✅ RTF document loaded ({len(file_content.split())} words)")
+                except ImportError:
+                    st.warning("📦 Optional: For RTF support, install striprtf")
+                    st.code("pip install striprtf")
+                    return None
+                except Exception as e:
+                    st.error(f"Error reading RTF: {str(e)}")
+                    return None
+            
+            # 4. SUBTITLE FILES - Common from automated transcription
+            elif file_extension in ['vtt', 'srt']:
+                file_content = uploaded_file.read().decode('utf-8', errors='ignore')
+                # Clean up subtitle formatting
+                lines = file_content.split('\n')
+                clean_lines = []
+                for line in lines:
+                    # Remove timestamps and numbers
+                    if '-->' not in line and not line.strip().isdigit() and line.strip():
+                        clean_lines.append(line.strip())
+                file_content = ' '.join(clean_lines)
+                st.success(f"✅ Subtitle file loaded ({len(clean_lines)} lines, {len(file_content.split())} words)")
+            
+            # 5. JSON - Some transcription APIs export this format
+            elif file_extension == 'json':
+                try:
+                    import json
+                    data = json.loads(uploaded_file.read().decode('utf-8'))
+                    
+                    # Try common JSON structures from transcription services
+                    if isinstance(data, dict):
+                        # OpenAI Whisper / Google Speech-to-Text
+                        if 'text' in data:
+                            file_content = data['text']
+                            st.success(f"✅ JSON transcript loaded ({len(file_content.split())} words)")
+                        elif 'results' in data:
+                            # Google Speech-to-Text format
+                            texts = []
+                            for r in data['results']:
+                                if 'alternatives' in r and r['alternatives']:
+                                    texts.append(r['alternatives'][0].get('transcript', ''))
+                            file_content = ' '.join(texts)
+                            st.success(f"✅ Google Speech-to-Text JSON loaded ({len(file_content.split())} words)")
+                        elif 'transcript' in data:
+                            # Otter.ai format
+                            if isinstance(data['transcript'], list):
+                                texts = [t.get('text', '') for t in data['transcript'] if t.get('text')]
+                                file_content = ' '.join(texts)
+                            else:
+                                file_content = data['transcript']
+                            st.success(f"✅ Otter.ai JSON loaded ({len(file_content.split())} words)")
+                        else:
+                            # Unknown structure - show preview
+                            preview = str(data)[:200] + "..." if len(str(data)) > 200 else str(data)
+                            st.warning(f"⚠️ Unknown JSON structure. Preview: {preview}")
+                            file_content = str(data)
+                    else:
+                        file_content = str(data)
+                except Exception as e:
+                    st.error(f"Error parsing JSON: {str(e)}")
+                    return None
+            
+            # 6. MARKDOWN - For notes and documentation
+            elif file_extension == 'md':
+                file_content = uploaded_file.read().decode('utf-8', errors='ignore')
+                # Basic markdown cleanup (remove formatting symbols)
+                file_content = re.sub(r'#{1,6}\s*', '', file_content)  # Remove headers
+                file_content = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', file_content)  # Remove links
+                file_content = re.sub(r'[*_]{1,2}([^*_]+)[*_]{1,2}', r'\1', file_content)  # Remove emphasis
+                st.success(f"✅ Markdown file loaded ({len(file_content.split())} words)")
+            
+            # 7. Unsupported format
+            else:
+                st.error(f"❌ Unsupported file format: .{file_extension}")
+                st.info("Supported formats: .txt, .docx, .rtf, .vtt, .srt, .json, .md")
+                return None
+            
+            # Validate we got content
+            if not file_content or not file_content.strip():
+                st.warning("The file appears to be empty or couldn't be read")
+                return None
+            
+            # Check file size warning
+            if file_size_mb > 10:
+                st.warning(f"⚠️ Large file ({file_size_mb:.1f}MB) - processing may be slow")
+            
+            # Clean up the text
+            # Remove excessive whitespace
+            file_content = re.sub(r'\s+', ' ', file_content)
+            
+            # Split into paragraphs (by sentences for speech-to-text which often lacks paragraph breaks)
+            sentences = re.split(r'[.!?]+', file_content)
+            paragraphs = []
+            current_para = []
+            
+            for sentence in sentences:
+                if sentence.strip():
+                    current_para.append(sentence.strip() + '.')
+                    # Create a new paragraph every 3-4 sentences
+                    if len(current_para) >= 4:
+                        paragraphs.append(' '.join(current_para))
+                        current_para = []
+            
+            # Add any remaining sentences
+            if current_para:
+                paragraphs.append(' '.join(current_para))
+            
+            # If no paragraphs created (very short text), use the whole thing
+            if not paragraphs:
+                paragraphs = [file_content]
+            
+            # Wrap each paragraph in <p> tags
+            html_content = ''
+            for para in paragraphs:
+                if para.strip():
+                    # Escape any HTML characters
+                    para = para.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    html_content += f'<p>{para.strip()}</p>'
+            
+            return html_content
+            
+        except Exception as e:
+            st.error(f"Error importing file: {str(e)}")
+            return None
+    
     def display_vignette_creator(self, on_publish=None, edit_vignette=None):
         # Create STABLE keys for this vignette
         if edit_vignette:
@@ -355,9 +541,9 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
         st.markdown("---")
         
         # ============================================================================
-        # BUTTONS ROW - WITH SPELLCHECK AND AI REWRITE
+        # BUTTONS ROW - WITH IMPORT BUTTON
         # ============================================================================
-        col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 2])
+        col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 1, 1, 1, 1, 2])
         
         # Spellcheck state management
         spellcheck_base = f"spell_{editor_key}"
@@ -365,6 +551,10 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
         current_content = st.session_state.get(content_key, "")
         has_content = current_content and current_content != "<p><br></p>" and current_content != "<p>Write your story here...</p>"
         showing_results = spell_result_key in st.session_state and st.session_state[spell_result_key].get("show", False)
+        
+        # Import state management
+        import_key = f"import_{editor_key}"
+        show_import = st.session_state.get(import_key, False)
         
         with col1:
             if st.button("💾 Save Draft", key=f"{base_key}_save_draft", type="primary", use_container_width=True):
@@ -383,7 +573,6 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                         st.success("✅ Draft saved!")
                         st.session_state.draft_success = True
                     
-                    # Clear spellcheck results
                     if spell_result_key in st.session_state:
                         del st.session_state[spell_result_key]
                     
@@ -413,11 +602,9 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                         st.success("🎉 Published successfully!")
                         vignette_data = v
                     
-                    # Call on_publish callback if provided
                     if on_publish:
                         on_publish(vignette_data)
                     
-                    # Clear spellcheck results
                     if spell_result_key in st.session_state:
                         del st.session_state[spell_result_key]
                     
@@ -427,15 +614,12 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                     st.rerun()
         
         with col3:
-            # Spellcheck Button - USING THE CLASS METHOD
             if has_content and not showing_results:
                 if st.button("🔍 Spell Check", key=f"{base_key}_spell", use_container_width=True):
                     with st.spinner("Checking spelling and grammar..."):
                         text_only = re.sub(r'<[^>]+>', '', current_content)
                         if len(text_only.split()) >= 3:
-                            # Use the class method for spell checking
                             corrected = self.check_spelling(text_only)
-                            
                             if corrected and corrected != text_only:
                                 st.session_state[spell_result_key] = {
                                     "original": text_only,
@@ -454,7 +638,6 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                 st.button("🔍 Spell Check", key=f"{base_key}_spell_disabled", disabled=True, use_container_width=True)
         
         with col4:
-            # AI Rewrite Button
             if has_content:
                 if st.button("✨ AI Rewrite", key=f"{base_key}_ai_rewrite", use_container_width=True):
                     st.session_state[f"{base_key}_show_ai_menu"] = True
@@ -463,7 +646,12 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                 st.button("✨ AI Rewrite", key=f"{base_key}_ai_disabled", disabled=True, use_container_width=True)
         
         with col5:
-            # Person selector dropdown (appears when AI Rewrite is clicked)
+            # IMPORT BUTTON
+            if st.button("📂 Import File", key=f"{base_key}_import", use_container_width=True):
+                st.session_state[import_key] = not st.session_state.get(import_key, False)
+                st.rerun()
+        
+        with col6:
             if st.session_state.get(f"{base_key}_show_ai_menu", False):
                 person_option = st.selectbox(
                     "Voice:",
@@ -488,11 +676,9 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                         else:
                             st.error(result.get('error', 'Failed to rewrite'))
             else:
-                # Placeholder to maintain column layout
                 st.markdown("")
         
-        with col6:
-            # Preview and Cancel buttons
+        with col7:
             nav1, nav2 = st.columns(2)
             with nav1:
                 if st.button("👁️ Preview", key=f"{base_key}_preview", use_container_width=True):
@@ -500,8 +686,8 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                     st.rerun()
             with nav2:
                 if st.button("❌ Cancel", key=f"{base_key}_cancel", use_container_width=True):
-                    # Clear session state
-                    for key in [content_key, version_key, spell_result_key, f"{base_key}_ai_result", f"{base_key}_show_ai_menu", f"{base_key}_show_preview"]:
+                    for key in [content_key, version_key, spell_result_key, f"{base_key}_ai_result", 
+                               f"{base_key}_show_ai_menu", f"{base_key}_show_preview", import_key]:
                         if key in st.session_state:
                             try:
                                 del st.session_state[key]
@@ -510,6 +696,95 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                     st.session_state.show_vignette_modal = False
                     st.session_state.editing_vignette_id = None
                     st.rerun()
+        
+        # Display import section if toggled
+        if show_import:
+            st.markdown("---")
+            st.markdown("### 📂 Import Text File")
+            
+            # Show supported formats table
+            with st.expander("📋 Supported File Formats", expanded=True):
+                st.markdown("""
+                | Format | Description | Typical Use |
+                |--------|-------------|-------------|
+                | **.txt** | Plain text | Universal - works everywhere |
+                | **.docx** | Microsoft Word | Business docs, interview transcripts |
+                | **.rtf** | Rich Text Format | Older word processors |
+                | **.vtt/.srt** | Subtitle files | Automated transcription output |
+                | **.json** | JSON data | Speech-to-text APIs (Whisper, Google) |
+                | **.md** | Markdown | Notes, documentation |
+                
+                **Maximum file size:** 50MB
+                """)
+            
+            uploaded_file = st.file_uploader(
+                "Choose a file to import",
+                type=['txt', 'docx', 'rtf', 'vtt', 'srt', 'json', 'md'],
+                key=f"{base_key}_file_uploader",
+                help="Select a file from your computer to import into this vignette"
+            )
+            
+            if uploaded_file:
+                col_imp1, col_imp2, col_imp3 = st.columns([1, 1, 2])
+                with col_imp1:
+                    if st.button("📥 Import", key=f"{base_key}_do_import", type="primary", use_container_width=True):
+                        with st.spinner("Importing file..."):
+                            imported_html = self.import_text_file(uploaded_file)
+                            if imported_html:
+                                # Append to existing content or replace?
+                                current = st.session_state.get(content_key, "")
+                                if current and current != "<p>Write your story here...</p>" and current != "<p><br></p>":
+                                    # Ask user what to do
+                                    st.session_state[f"{import_key}_pending"] = imported_html
+                                    st.session_state[f"{import_key}_show_options"] = True
+                                else:
+                                    # No existing content, just replace
+                                    st.session_state[content_key] = imported_html
+                                    st.session_state[version_key] += 1
+                                    st.session_state[import_key] = False
+                                    st.success("✅ File imported successfully!")
+                                    st.rerun()
+                
+                with col_imp2:
+                    if st.button("❌ Cancel", key=f"{base_key}_cancel_import", use_container_width=True):
+                        st.session_state[import_key] = False
+                        st.rerun()
+                
+                # Show import options if needed
+                if st.session_state.get(f"{import_key}_show_options", False):
+                    st.markdown("---")
+                    st.markdown("**This vignette already has content. What would you like to do?**")
+                    
+                    col_opt1, col_opt2, col_opt3 = st.columns(3)
+                    with col_opt1:
+                        if st.button("📝 Replace Current", key=f"{base_key}_import_replace", use_container_width=True):
+                            st.session_state[content_key] = st.session_state[f"{import_key}_pending"]
+                            st.session_state[version_key] += 1
+                            st.session_state[import_key] = False
+                            st.session_state[f"{import_key}_pending"] = None
+                            st.session_state[f"{import_key}_show_options"] = False
+                            st.success("✅ File imported (replaced current content)!")
+                            st.rerun()
+                    
+                    with col_opt2:
+                        if st.button("➕ Append to Current", key=f"{base_key}_import_append", use_container_width=True):
+                            current = st.session_state.get(content_key, "")
+                            # Remove closing tags if any
+                            current = current.replace('</p>', '')
+                            new_content = current + st.session_state[f"{import_key}_pending"]
+                            st.session_state[content_key] = new_content
+                            st.session_state[version_key] += 1
+                            st.session_state[import_key] = False
+                            st.session_state[f"{import_key}_pending"] = None
+                            st.session_state[f"{import_key}_show_options"] = False
+                            st.success("✅ File imported (appended to current content)!")
+                            st.rerun()
+                    
+                    with col_opt3:
+                        if st.button("❌ Cancel Import", key=f"{base_key}_import_cancel", use_container_width=True):
+                            st.session_state[f"{import_key}_pending"] = None
+                            st.session_state[f"{import_key}_show_options"] = False
+                            st.rerun()
         
         # Display spellcheck results if they exist (below the button row)
         if showing_results:
