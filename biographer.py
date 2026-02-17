@@ -3509,21 +3509,33 @@ with col3:
     if has_content:
         if st.button("🔍 Spell Check", key=f"spell_btn_{editor_key}", use_container_width=True):
             with st.spinner("Checking spelling and grammar..."):
+                # Extract text without HTML
                 text_only = re.sub(r'<[^>]+>', '', current_content)
+                print(f"Original text: {text_only}")  # Debug
+                
                 corrected = auto_correct_text(text_only)
+                print(f"Corrected text: {corrected}")  # Debug
+                
                 if corrected and corrected != text_only:
-                    # Wrap in paragraph tags if not present
-                    if not corrected.startswith('<p>'):
+                    # Preserve any HTML structure that was there (like paragraphs)
+                    if current_content.startswith('<p>') and not corrected.startswith('<p>'):
                         corrected = f'<p>{corrected}</p>'
+                    elif not corrected.startswith('<p>'):
+                        corrected = f'<p>{corrected}</p>'
+                    
+                    # Update session state
                     st.session_state[content_key] = corrected
+                    
+                    # Force save to database
+                    save_response(current_session_id, current_question_text, corrected)
+                    
                     st.success("✅ Spelling and grammar corrected!")
                     time.sleep(1)
                     st.rerun()
                 elif corrected:
                     st.info("✓ No spelling or grammar issues found!")
-                    time.sleep(1.5)
                 else:
-                    st.error("Spell check failed")
+                    st.error("Spell check failed - no response from AI")
     else:
         st.button("🔍 Spell Check", key=f"spell_disabled_{editor_key}", disabled=True, use_container_width=True)
 
