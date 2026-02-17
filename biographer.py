@@ -3405,7 +3405,53 @@ if content is not None and content != st.session_state[content_key]:
 st.markdown("---")
 
 # ============================================================================
-# SPELLCHECK BUTTON - Add this after the Quill editor section
+# QUILL EDITOR
+# ============================================================================
+# Create a stable key for the editor
+editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
+content_key = f"{editor_key}_content"
+
+# Get existing answer
+existing_answer = ""
+if current_session_id in st.session_state.responses:
+    if current_question_text in st.session_state.responses[current_session_id]["questions"]:
+        existing_answer = st.session_state.responses[current_session_id]["questions"][current_question_text]["answer"]
+
+# Initialize session state for this editor's content
+if content_key not in st.session_state:
+    if existing_answer and existing_answer != "<p>Start writing your story here...</p>":
+        st.session_state[content_key] = existing_answer
+    else:
+        st.session_state[content_key] = "<p>Start writing your story here...</p>"
+
+st.markdown("### ✍️ Your Story")
+st.markdown("""
+<div class="image-drop-info">
+    📸 <strong>Drag & drop images</strong> directly into the editor.
+</div>
+""", unsafe_allow_html=True)
+
+# Use a consistent key for the editor - no hash function needed
+# The key will be: "quill_editor_" + session_id + "_" + question_text_safe
+question_text_safe = "".join(c for c in current_question_text if c.isalnum() or c.isspace()).replace(" ", "_")[:30]
+editor_component_key = f"quill_editor_{current_session_id}_{question_text_safe}"
+
+# Display the editor - it will NOT trigger reruns on typing
+content = st_quill(
+    value=st.session_state[content_key],
+    key=editor_component_key,  # Now using a stable key
+    placeholder="Start writing your story here...",
+    html=True  # Ensure HTML content is preserved
+)
+
+# Only update session state when content actually changes
+if content is not None and content != st.session_state[content_key]:
+    st.session_state[content_key] = content
+
+st.markdown("---")
+
+# ============================================================================
+# SPELLCHECK BUTTON - Add this after the Quill editor
 # ============================================================================
 st.markdown("### 🔍 Spell Check")
 
