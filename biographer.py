@@ -3414,99 +3414,22 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# SPELLCHECK BUTTON - Fixed duplicate key issue
+# SPELLCHECK BUTTON - Compact version (remove the heading section above)
 # ============================================================================
-st.markdown("### 🔍 Spell Check")
+# The spellcheck functionality is now integrated into the button row below
+# No need for a separate section with heading
 
-# Get current content for spellcheck
-current_content = st.session_state.get(content_key, "")
-has_content = current_content and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>"
+# ============================================================================
+# BUTTONS ROW - WITH SPELLCHECK AND AI REWRITE
+# ============================================================================
+col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 1, 1, 1, 2])
 
-# Create a unique base for spellcheck keys using editor_base_key
+# Spellcheck state management
 spellcheck_base = f"spell_{editor_base_key}"
 spell_result_key = f"{spellcheck_base}_result"
-
-# Check if we're showing results
+current_content = st.session_state.get(content_key, "")
+has_content = current_content and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>"
 showing_results = spell_result_key in st.session_state and st.session_state[spell_result_key].get("show", False)
-
-col_spell1, col_spell2, col_spell3 = st.columns([1, 3, 1])
-with col_spell2:
-    if has_content and not showing_results:
-        # Only show the check button when not showing results
-        if st.button("📝 Check Spelling & Grammar", key=f"{spellcheck_base}_btn", type="secondary", use_container_width=True):
-            with st.spinner("Checking spelling and grammar..."):
-                # Extract text without HTML tags
-                text_only = re.sub(r'<[^>]+>', '', current_content)
-                if len(text_only.split()) >= 3:
-                    corrected = auto_correct_text(text_only)
-                    if corrected and corrected != text_only:
-                        # Store the correction in session state
-                        st.session_state[spell_result_key] = {
-                            "original": text_only,
-                            "corrected": corrected,
-                            "show": True
-                        }
-                        st.rerun()
-                    else:
-                        st.session_state[spell_result_key] = {
-                            "message": "✅ No spelling or grammar issues found!",
-                            "show": True
-                        }
-                        st.rerun()
-                else:
-                    st.warning("Text too short for spell check (minimum 3 words)")
-    
-    elif has_content and showing_results:
-        # Show the results instead of the check button
-        result = st.session_state[spell_result_key]
-        
-        if "corrected" in result:
-            st.markdown("### ✅ Suggested Corrections:")
-            st.markdown(f'<div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50;">{result["corrected"]}</div>', unsafe_allow_html=True)
-            
-            col_apply1, col_apply2, col_apply3 = st.columns([1, 1, 1])
-            with col_apply2:
-                if st.button("📋 Apply Corrections", key=f"{spellcheck_base}_apply", type="primary", use_container_width=True):
-                    # Wrap in paragraph tags if needed
-                    corrected = result["corrected"]
-                    if not corrected.startswith('<p>'):
-                        corrected = f'<p>{corrected}</p>'
-                    
-                    # Update the content in session state
-                    st.session_state[content_key] = corrected
-                    
-                    # Save the response immediately
-                    save_response(current_session_id, current_question_text, corrected)
-                    
-                    # Increment the version to force Quill to remount with new content
-                    st.session_state[version_key] += 1
-                    
-                    # Clear the result
-                    st.session_state[spell_result_key] = {"show": False}
-                    
-                    st.success("✅ Corrections applied!")
-                    st.rerun()
-                
-                if st.button("❌ Dismiss", key=f"{spellcheck_base}_dismiss", use_container_width=True):
-                    st.session_state[spell_result_key] = {"show": False}
-                    st.rerun()
-        
-        elif "message" in result:
-            st.success(result["message"])
-            if st.button("Dismiss", key=f"{spellcheck_base}_dismiss_msg"):
-                st.session_state[spell_result_key] = {"show": False}
-                st.rerun()
-    
-    else:
-        # No content, show disabled button
-        st.button("📝 Check Spelling & Grammar", key=f"{spellcheck_base}_disabled", disabled=True, use_container_width=True)
-
-st.markdown("---")
-
-# ============================================================================
-# BUTTONS ROW - WITH AI REWRITE
-# ============================================================================
-col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 2])
 
 with col1:
     if st.button("💾 Save", key=f"save_btn_{editor_base_key}", type="primary", use_container_width=True):
@@ -3533,32 +3456,52 @@ with col2:
         st.button("🗑️", key=f"del_disabled_{editor_base_key}", disabled=True, use_container_width=True)
 
 with col3:
-    # AI Rewrite Button - Only enabled if there's content
-    current_content = st.session_state.get(content_key, "")
-    has_content = current_content and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>"
-    
+    # Spellcheck Button
+    if has_content and not showing_results:
+        if st.button("🔍 Spell", key=f"spell_{editor_base_key}", use_container_width=True):
+            with st.spinner("Checking..."):
+                text_only = re.sub(r'<[^>]+>', '', current_content)
+                if len(text_only.split()) >= 3:
+                    corrected = auto_correct_text(text_only)
+                    if corrected and corrected != text_only:
+                        st.session_state[spell_result_key] = {
+                            "original": text_only,
+                            "corrected": corrected,
+                            "show": True
+                        }
+                    else:
+                        st.session_state[spell_result_key] = {
+                            "message": "✅ No issues found!",
+                            "show": True
+                        }
+                    st.rerun()
+                else:
+                    st.warning("Text too short")
+    else:
+        st.button("🔍 Spell", key=f"spell_disabled_{editor_base_key}", disabled=True, use_container_width=True)
+
+with col4:
+    # AI Rewrite Button
     if has_content:
-        if st.button("✨ AI Rewrite", key=f"rewrite_btn_{editor_base_key}", use_container_width=True):
+        if st.button("✨ Rewrite", key=f"rewrite_btn_{editor_base_key}", use_container_width=True):
             st.session_state.show_ai_rewrite_menu = True
             st.rerun()
     else:
-        st.button("✨ AI Rewrite", key=f"rewrite_disabled_{editor_base_key}", disabled=True, use_container_width=True)
+        st.button("✨ Rewrite", key=f"rewrite_disabled_{editor_base_key}", disabled=True, use_container_width=True)
 
-with col4:
+with col5:
     # Person selector dropdown (appears when AI Rewrite is clicked)
     if st.session_state.get('show_ai_rewrite_menu', False):
         person_option = st.selectbox(
             "Voice:",
             options=["1st", "2nd", "3rd"],
-            format_func=lambda x: {"1st": "👤 First Person (I)", 
-                                   "2nd": "💬 Second Person (You)", 
-                                   "3rd": "📖 Third Person (He/She)"}[x],
+            format_func=lambda x: {"1st": "👤 1st", "2nd": "💬 2nd", "3rd": "📖 3rd"}[x],
             key=f"person_select_{editor_base_key}",
             label_visibility="collapsed"
         )
         
         if st.button("Go", key=f"go_rewrite_{editor_base_key}", type="primary", use_container_width=True):
-            with st.spinner(f"Rewriting in {person_option} person using your profile..."):
+            with st.spinner(f"Rewriting..."):
                 current_content = st.session_state[content_key]
                 result = ai_rewrite_answer(
                     current_content, 
@@ -3578,25 +3521,58 @@ with col4:
         # Placeholder to maintain column layout
         st.markdown("")
 
-with col5:
+with col6:
     nav1, nav2 = st.columns(2)
     with nav1: 
         prev_disabled = st.session_state.current_question == 0
-        if st.button("← Previous", disabled=prev_disabled, key=f"prev_{editor_base_key}", use_container_width=True):
+        if st.button("←", disabled=prev_disabled, key=f"prev_{editor_base_key}", use_container_width=True):
             if not prev_disabled:
                 st.session_state.current_question -= 1
                 st.session_state.current_question_override = None
-                st.session_state.show_ai_rewrite_menu = False  # Close menu when navigating
+                st.session_state.show_ai_rewrite_menu = False
                 st.rerun()
     with nav2:
         next_disabled = st.session_state.current_question >= len(current_session["questions"]) - 1
-        if st.button("Next →", disabled=next_disabled, key=f"next_{editor_base_key}", use_container_width=True):
+        if st.button("→", disabled=next_disabled, key=f"next_{editor_base_key}", use_container_width=True):
             if not next_disabled:
                 st.session_state.current_question += 1
                 st.session_state.current_question_override = None
-                st.session_state.show_ai_rewrite_menu = False  # Close menu when navigating
+                st.session_state.show_ai_rewrite_menu = False
                 st.rerun()
 
+# Display spellcheck results if they exist (below the button row)
+if showing_results:
+    result = st.session_state[spell_result_key]
+    if "corrected" in result:
+        st.markdown("---")
+        st.markdown("### ✅ Suggested Corrections:")
+        st.markdown(f'<div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50;">{result["corrected"]}</div>', unsafe_allow_html=True)
+        
+        col_apply1, col_apply2, col_apply3 = st.columns([1, 1, 1])
+        with col_apply2:
+            if st.button("📋 Apply Corrections", key=f"{spellcheck_base}_apply", type="primary", use_container_width=True):
+                corrected = result["corrected"]
+                if not corrected.startswith('<p>'):
+                    corrected = f'<p>{corrected}</p>'
+                
+                st.session_state[content_key] = corrected
+                save_response(current_session_id, current_question_text, corrected)
+                st.session_state[version_key] += 1
+                st.session_state[spell_result_key] = {"show": False}
+                st.success("✅ Corrections applied!")
+                st.rerun()
+            
+            if st.button("❌ Dismiss", key=f"{spellcheck_base}_dismiss", use_container_width=True):
+                st.session_state[spell_result_key] = {"show": False}
+                st.rerun()
+    
+    elif "message" in result:
+        st.success(result["message"])
+        if st.button("Dismiss", key=f"{spellcheck_base}_dismiss_msg"):
+            st.session_state[spell_result_key] = {"show": False}
+            st.rerun()
+
+st.markdown("---")
 # ============================================================================
 # IMAGE UPLOAD SECTION
 # ============================================================================
