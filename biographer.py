@@ -3345,10 +3345,13 @@ if st.session_state.logged_in:
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 
 # ============================================================================
-# QUILL EDITOR
+# QUILL EDITOR - WITH DEBUGGING AND UNIQUE KEYS
 # ============================================================================
-editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
-content_key = f"{editor_key}_content"
+import logging
+
+# Create a stable base for the editor
+editor_base_key = f"quill_{current_session_id}_{current_question_text[:20]}"
+content_key = f"{editor_base_key}_content"
 
 # Get existing answer
 existing_answer = ""
@@ -3370,88 +3373,52 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Use a unique key for the editor that doesn't change
-editor_component_key = f"quill_editor_{current_session_id}_{hash(current_question_text)}"
+# Create a truly unique key using a counter that persists in session state
+if 'quill_counter' not in st.session_state:
+    st.session_state.quill_counter = 0
 
-# Display the editor - it will NOT trigger reruns on typing
-content = st_quill(
-    value=st.session_state[content_key],
-    key=editor_component_key,
-    placeholder="Start writing your story here...",
-    html=True  # Ensure HTML content is preserved
-)
+# Generate a unique key for this editor instance
+question_text_safe = "".join(c for c in current_question_text if c.isalnum() or c.isspace()).replace(" ", "_")[:20]
+editor_component_key = f"quill_editor_{current_session_id}_{question_text_safe}_{st.session_state.quill_counter}"
 
-# Only update session state when content actually changes
-if content is not None and content != st.session_state[content_key]:
-    st.session_state[content_key] = content
+# Increment counter for next potential editor
+st.session_state.quill_counter += 1
 
-st.markdown("---")
+# Debug: Print the key being used (remove this in production)
+print(f"Creating Quill editor with key: {editor_component_key}")
 
-# Use a unique key for the editor that doesn't change
-editor_component_key = f"quill_editor_{current_session_id}_{hash(current_question_text)}"
-
-# Display the editor - it will NOT trigger reruns on typing
-content = st_quill(
-    value=st.session_state[content_key],
-    key=editor_component_key,
-    placeholder="Start writing your story here...",
-    html=True  # Ensure HTML content is preserved
-)
-
-# Only update session state when content actually changes
-if content is not None and content != st.session_state[content_key]:
-    st.session_state[content_key] = content
-
-st.markdown("---")
-
-# ============================================================================
-# QUILL EDITOR
-# ============================================================================
-# Create a stable key for the editor
-editor_key = f"quill_{current_session_id}_{current_question_text[:20]}"
-content_key = f"{editor_key}_content"
-
-# Get existing answer
-existing_answer = ""
-if current_session_id in st.session_state.responses:
-    if current_question_text in st.session_state.responses[current_session_id]["questions"]:
-        existing_answer = st.session_state.responses[current_session_id]["questions"][current_question_text]["answer"]
-
-# Initialize session state for this editor's content
-if content_key not in st.session_state:
-    if existing_answer and existing_answer != "<p>Start writing your story here...</p>":
-        st.session_state[content_key] = existing_answer
-    else:
-        st.session_state[content_key] = "<p>Start writing your story here...</p>"
-
-st.markdown("### ✍️ Your Story")
-st.markdown("""
-<div class="image-drop-info">
-    📸 <strong>Drag & drop images</strong> directly into the editor.
-</div>
-""", unsafe_allow_html=True)
-
-# Use a consistent key for the editor - no hash function needed
-# The key will be: "quill_editor_" + session_id + "_" + question_text_safe
-question_text_safe = "".join(c for c in current_question_text if c.isalnum() or c.isspace()).replace(" ", "_")[:30]
-editor_component_key = f"quill_editor_{current_session_id}_{question_text_safe}"
-
-# Display the editor - it will NOT trigger reruns on typing
-content = st_quill(
-    value=st.session_state[content_key],
-    key=editor_component_key,  # Now using a stable key
-    placeholder="Start writing your story here...",
-    html=True  # Ensure HTML content is preserved
-)
-
-# Only update session state when content actually changes
-if content is not None and content != st.session_state[content_key]:
-    st.session_state[content_key] = content
+# Display the editor
+try:
+    content = st_quill(
+        value=st.session_state[content_key],
+        key=editor_component_key,
+        placeholder="Start writing your story here...",
+        html=True
+    )
+    
+    # Only update session state when content actually changes
+    if content is not None and content != st.session_state[content_key]:
+        st.session_state[content_key] = content
+        # Also update the response immediately for autosave? (optional)
+        # save_response(current_session_id, current_question_text, content)
+        
+except Exception as e:
+    st.error(f"Error loading editor: {str(e)}")
+    # Fallback to text area if Quill fails
+    content = st.text_area(
+        "Your story (fallback editor):",
+        value=re.sub(r'<[^>]+>', '', st.session_state[content_key]),
+        height=300,
+        key=f"fallback_{editor_base_key}"
+    )
+    if content:
+        # Wrap in paragraph tags for consistency
+        st.session_state[content_key] = f"<p>{content}</p>"
 
 st.markdown("---")
 
 # ============================================================================
-# SPELLCHECK BUTTON - Add this after the Quill editor
+# SPELLCHECK BUTTON - With unique keys
 # ============================================================================
 st.markdown("### 🔍 Spell Check")
 
@@ -3459,36 +3426,71 @@ st.markdown("### 🔍 Spell Check")
 current_content = st.session_state.get(content_key, "")
 has_content = current_content and current_content != "<p><br></p>" and current_content != "<p>Start writing your story here...</p>"
 
+# Create a unique base for spellcheck keys
+spellcheck_base = f"spell_{current_session_id}_{current_question_text[:20]}"
+
 col_spell1, col_spell2, col_spell3 = st.columns([1, 3, 1])
 with col_spell2:
     if has_content:
-        if st.button("📝 Check Spelling & Grammar", key=f"spellcheck_{editor_key}", type="secondary", use_container_width=True):
+        # Store spellcheck results in session state to persist across reruns
+        spell_result_key = f"{spellcheck_base}_result"
+        
+        if st.button("📝 Check Spelling & Grammar", key=f"{spellcheck_base}_btn", type="secondary", use_container_width=True):
             with st.spinner("Checking spelling and grammar..."):
                 # Extract text without HTML tags
                 text_only = re.sub(r'<[^>]+>', '', current_content)
                 if len(text_only.split()) >= 3:
                     corrected = auto_correct_text(text_only)
                     if corrected and corrected != text_only:
-                        # Show the corrected version
-                        st.markdown("### ✅ Suggested Corrections:")
-                        st.markdown(f'<div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50;">{corrected}</div>', unsafe_allow_html=True)
-                        
-                        col_apply1, col_apply2, col_apply3 = st.columns([1, 1, 1])
-                        with col_apply2:
-                            if st.button("📋 Apply Corrections", key=f"apply_spell_{editor_key}", type="primary", use_container_width=True):
-                                # Wrap in paragraph tags if needed
-                                if not corrected.startswith('<p>'):
-                                    corrected = f'<p>{corrected}</p>'
-                                st.session_state[content_key] = corrected
-                                st.success("✅ Corrections applied!")
-                                time.sleep(1)
-                                st.rerun()
+                        # Store the correction in session state
+                        st.session_state[spell_result_key] = {
+                            "original": text_only,
+                            "corrected": corrected,
+                            "show": True
+                        }
+                        st.rerun()
                     else:
-                        st.success("✅ No spelling or grammar issues found!")
+                        st.session_state[spell_result_key] = {
+                            "message": "✅ No spelling or grammar issues found!",
+                            "show": True
+                        }
+                        st.rerun()
                 else:
                     st.warning("Text too short for spell check (minimum 3 words)")
+        
+        # Display spellcheck results if they exist
+        if spell_result_key in st.session_state and st.session_state[spell_result_key].get("show", False):
+            result = st.session_state[spell_result_key]
+            
+            if "corrected" in result:
+                st.markdown("### ✅ Suggested Corrections:")
+                st.markdown(f'<div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50;">{result["corrected"]}</div>', unsafe_allow_html=True)
+                
+                col_apply1, col_apply2, col_apply3 = st.columns([1, 1, 1])
+                with col_apply2:
+                    if st.button("📋 Apply Corrections", key=f"{spellcheck_base}_apply", type="primary", use_container_width=True):
+                        # Wrap in paragraph tags if needed
+                        corrected = result["corrected"]
+                        if not corrected.startswith('<p>'):
+                            corrected = f'<p>{corrected}</p>'
+                        st.session_state[content_key] = corrected
+                        # Clear the result
+                        st.session_state[spell_result_key] = {"show": False}
+                        st.success("✅ Corrections applied!")
+                        time.sleep(1)
+                        st.rerun()
+                    
+                    if st.button("❌ Dismiss", key=f"{spellcheck_base}_dismiss", use_container_width=True):
+                        st.session_state[spell_result_key] = {"show": False}
+                        st.rerun()
+            
+            elif "message" in result:
+                st.success(result["message"])
+                if st.button("Dismiss", key=f"{spellcheck_base}_dismiss_msg"):
+                    st.session_state[spell_result_key] = {"show": False}
+                    st.rerun()
     else:
-        st.button("📝 Check Spelling & Grammar", key=f"spellcheck_disabled_{editor_key}", disabled=True, use_container_width=True)
+        st.button("📝 Check Spelling & Grammar", key=f"{spellcheck_base}_disabled", disabled=True, use_container_width=True)
 
 st.markdown("---")
 
