@@ -3043,7 +3043,7 @@ with st.sidebar:
         profile = st.session_state.user_account['profile']
         st.success(f"✓ **{profile['first_name']} {profile['last_name']}**")
     if st.button("📝 Complete Profile", width='stretch'): 
-        st.session_state.show_profile_setup = True; 
+        st.session_state.show_profile_setup = True
         st.rerun()
     if st.button("🚪 Log Out", width='stretch'): 
         logout_user()
@@ -3063,7 +3063,7 @@ with st.sidebar:
     st.divider()
     st.header("📚 Question Banks")
     if st.button("📋 Bank Manager", width='stretch', type="primary"): 
-        st.session_state.show_bank_manager = True; 
+        st.session_state.show_bank_manager = True
         st.rerun()
     if st.session_state.get('current_bank_name'): 
         st.info(f"**Current Bank:**\n{st.session_state.current_bank_name}")
@@ -3080,43 +3080,47 @@ with st.sidebar:
             if i == st.session_state.current_session: 
                 status = "▶️"
             if st.button(f"{status} Session {sid}: {s['title']}", key=f"sel_sesh_{i}", width='stretch'):
-                st.session_state.update(current_session=i, current_question=0, editing=False, current_question_override=None, show_ai_rewrite_menu=False); 
+                st.session_state.update(current_session=i, current_question=0, editing=False, current_question_override=None, show_ai_rewrite_menu=False)
                 st.rerun()
     
     st.divider()
-st.header("✨ Vignettes")
-if st.button("📝 New Vignette", width='stretch'): 
-    # Create a REAL vignette in the database immediately
-    import uuid
-    new_id = str(uuid.uuid4())[:8]
+    st.header("✨ Vignettes")
+    if st.button("📝 New Vignette", width='stretch'): 
+        # Create a REAL vignette in the database immediately
+        import uuid
+        new_id = str(uuid.uuid4())[:8]
+        
+        # Initialize vignette manager if needed
+        if 'vignette_manager' not in st.session_state:
+            from vignettes import VignetteManager
+            st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+        
+        # Create the vignette with a permanent ID
+        st.session_state.vignette_manager.create_vignette_with_id(
+            id=new_id,
+            title="Untitled Vignette",
+            content="<p>Write your story here...</p>",
+            theme="Life Lesson",
+            mood="Reflective",
+            is_draft=True
+        )
+        
+        # Now open it for editing - it's an EXISTING vignette!
+        st.session_state.editing_vignette_id = new_id
+        st.session_state.show_vignette_modal = True
+        st.rerun()
     
-    # Initialize vignette manager if needed
-    if 'vignette_manager' not in st.session_state:
-        from vignettes import VignetteManager
-        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
-    
-    # Create the vignette with a permanent ID
-    st.session_state.vignette_manager.create_vignette_with_id(
-        id=new_id,
-        title="Untitled Vignette",
-        content="<p>Write your story here...</p>",
-        theme="Life Lesson",
-        mood="Reflective",
-        is_draft=True
-    )
-    
-    # Now open it for editing - it's an EXISTING vignette!
-    st.session_state.editing_vignette_id = new_id
-    st.session_state.show_vignette_modal = True
-    st.rerun()
+    if st.button("📖 View All Vignettes", width='stretch'): 
+        st.session_state.show_vignette_manager = True
+        st.rerun()
     
     st.divider()
     st.header("📖 Session Management")
     if st.button("📋 All Sessions", width='stretch'): 
-        st.session_state.show_session_manager = True; 
+        st.session_state.show_session_manager = True
         st.rerun()
     if st.button("➕ Custom Session", width='stretch'): 
-        st.session_state.show_session_creator = True; 
+        st.session_state.show_session_creator = True
         st.rerun()
     
     st.divider()
@@ -3236,10 +3240,10 @@ if st.button("📝 New Vignette", width='stretch'):
             sid = SESSIONS[st.session_state.current_session]["id"]
             st.session_state.responses[sid]["questions"] = {}
             save_user_data(st.session_state.user_id, st.session_state.responses)
-            st.session_state.confirming_clear = None; 
+            st.session_state.confirming_clear = None
             st.rerun()
         if st.button("❌ Cancel", key="can_sesh", width='stretch'): 
-            st.session_state.confirming_clear = None; 
+            st.session_state.confirming_clear = None
             st.rerun()
     elif st.session_state.confirming_clear == "all":
         st.warning("**Delete ALL answers for ALL sessions?**")
@@ -3247,17 +3251,17 @@ if st.button("📝 New Vignette", width='stretch'):
             for s in SESSIONS:
                 st.session_state.responses[s["id"]]["questions"] = {}
             save_user_data(st.session_state.user_id, st.session_state.responses)
-            st.session_state.confirming_clear = None; 
+            st.session_state.confirming_clear = None
             st.rerun()
         if st.button("❌ Cancel", key="can_all", width='stretch'): 
-            st.session_state.confirming_clear = None; 
+            st.session_state.confirming_clear = None
             st.rerun()
     else:
         if st.button("🗑️ Clear Session", width='stretch'): 
-            st.session_state.confirming_clear = "session"; 
+            st.session_state.confirming_clear = "session"
             st.rerun()
         if st.button("🔥 Clear All", width='stretch'): 
-            st.session_state.confirming_clear = "all"; 
+            st.session_state.confirming_clear = "all"
             st.rerun()
     
     st.divider()
@@ -3276,7 +3280,7 @@ if st.button("📝 New Vignette", width='stretch'):
                     if st.button(f"Go to Session", key=f"srch_go_{i}_{r['session_id']}", width='stretch'):
                         for idx, s in enumerate(SESSIONS):
                             if s["id"] == r['session_id']:
-                                st.session_state.update(current_session=idx, current_question_override=r['question'], show_ai_rewrite_menu=False); 
+                                st.session_state.update(current_session=idx, current_question_override=r['question'], show_ai_rewrite_menu=False)
                                 st.rerun()
                     st.divider()
                 if len(results) > 10: 
@@ -3848,11 +3852,3 @@ if st.session_state.user_account:
     st.caption(f"Tell My Story Timeline • 👤 {profile['first_name']} {profile['last_name']} • 📅 Account Age: {age} days • 📚 Bank: {st.session_state.get('current_bank_name', 'None')}")
 else: 
     st.caption(f"Tell My Story Timeline • User: {st.session_state.user_id}")
-
-
-
-
-
-
-
-
