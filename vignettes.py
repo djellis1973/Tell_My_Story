@@ -406,29 +406,27 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                     st.session_state.show_vignette_manager = True
                     st.rerun()
         
-        with col3:
+               with col3:
             # Spellcheck Button
             if has_content and not showing_results:
                 if st.button("🔍 Spell Check", key=f"{base_key}_spell", use_container_width=True):
                     with st.spinner("Checking spelling and grammar..."):
                         text_only = re.sub(r'<[^>]+>', '', current_content)
                         if len(text_only.split()) >= 3:
-                            # Simple spell check using OpenAI directly
-                            try:
-                                client = openai.OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY")))
-                                resp = client.chat.completions.create(
-                                    model="gpt-4o-mini",
-                                    messages=[
-                                        {"role": "system", "content": "Fix spelling and grammar. Return only corrected text."},
-                                        {"role": "user", "content": text_only}
-                                    ],
-                                    max_tokens=len(text_only) + 100, 
-                                    temperature=0.1
-                                )
-                                corrected = resp.choices[0].message.content
-                            except Exception as e:
-                                st.error(f"Spell check failed: {e}")
-                                st.rerun()
+                            # Import auto_correct_text from biographer at runtime (not at module level)
+                            # This avoids the circular import issue
+                            import sys
+                            import importlib
+                            
+                            # Force reload biographer to get the latest function
+                            if 'biographer' in sys.modules:
+                                biographer = sys.modules['biographer']
+                                # Reload to get the latest version
+                                biographer = importlib.reload(biographer)
+                            else:
+                                import biographer
+                            
+                            corrected = biographer.auto_correct_text(text_only)
                             
                             if corrected and corrected != text_only:
                                 st.session_state[spell_result_key] = {
@@ -446,15 +444,6 @@ REWRITTEN VERSION ({person_instructions[person_option]['name']}):"""
                             st.warning("Text too short for spell check (minimum 3 words)")
             else:
                 st.button("🔍 Spell Check", key=f"{base_key}_spell_disabled", disabled=True, use_container_width=True)
-        
-        with col4:
-            # AI Rewrite Button
-            if has_content:
-                if st.button("✨ AI Rewrite", key=f"{base_key}_ai_rewrite", use_container_width=True):
-                    st.session_state[f"{base_key}_show_ai_menu"] = True
-                    st.rerun()
-            else:
-                st.button("✨ AI Rewrite", key=f"{base_key}_ai_disabled", disabled=True, use_container_width=True)
         
         with col5:
             # Person selector dropdown (appears when AI Rewrite is clicked)
