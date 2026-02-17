@@ -209,7 +209,8 @@ class VignetteManager:
                 default_content = "<p>Write your story here... You can format text and drag & drop images directly into the editor.</p>"
             
             # Create a unique key for the editor
-            editor_key = f"quill_vignette_{edit_vignette.get('id', 'new')}_{int(time.time())}"
+            vignette_id = edit_vignette.get('id', 'new') if edit_vignette else 'new'
+editor_key = f"quill_vignette_{vignette_id}_{int(time.time())}"
             
             # Display Quill editor
             st.markdown('<div class="image-upload-info">📸 <strong>Drag & drop images</strong> directly into the editor. You can also use the image upload section below.</div>', unsafe_allow_html=True)
