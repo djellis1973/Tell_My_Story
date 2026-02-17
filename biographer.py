@@ -3379,9 +3379,11 @@ with col3:
             with st.spinner("Checking spelling and grammar..."):
                 # Extract text without HTML
                 text_only = re.sub(r'<[^>]+>', '', current_content)
+                st.write(f"DEBUG - Original text: {text_only}")  # DEBUG
                 
                 if text_only and len(text_only.split()) >= 3:
                     corrected = auto_correct_text(text_only)
+                    st.write(f"DEBUG - Corrected text: {corrected}")  # DEBUG
                     
                     if corrected and corrected != text_only:
                         # Preserve HTML formatting
@@ -3390,11 +3392,16 @@ with col3:
                         else:
                             new_content = f'<p>{corrected}</p>'
                         
+                        st.write(f"DEBUG - New content: {new_content}")  # DEBUG
+                        
                         # Update session state
                         st.session_state[content_key] = new_content
                         
                         # Save to database
-                        if save_response(current_session_id, current_question_text, new_content):
+                        save_result = save_response(current_session_id, current_question_text, new_content)
+                        st.write(f"DEBUG - Save result: {save_result}")  # DEBUG
+                        
+                        if save_result:
                             st.success("✅ Spelling and grammar corrected!")
                             time.sleep(1)
                             st.rerun()
