@@ -3414,7 +3414,7 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# SPELLCHECK BUTTON - With version increment
+# SPELLCHECK BUTTON - Fixed duplicate key issue
 # ============================================================================
 st.markdown("### 🔍 Spell Check")
 
@@ -3424,13 +3424,15 @@ has_content = current_content and current_content != "<p><br></p>" and current_c
 
 # Create a unique base for spellcheck keys using editor_base_key
 spellcheck_base = f"spell_{editor_base_key}"
+spell_result_key = f"{spellcheck_base}_result"
+
+# Check if we're showing results
+showing_results = spell_result_key in st.session_state and st.session_state[spell_result_key].get("show", False)
 
 col_spell1, col_spell2, col_spell3 = st.columns([1, 3, 1])
 with col_spell2:
-    if has_content:
-        # Store spellcheck results in session state to persist across reruns
-        spell_result_key = f"{spellcheck_base}_result"
-        
+    if has_content and not showing_results:
+        # Only show the check button when not showing results
         if st.button("📝 Check Spelling & Grammar", key=f"{spellcheck_base}_btn", type="secondary", use_container_width=True):
             with st.spinner("Checking spelling and grammar..."):
                 # Extract text without HTML tags
@@ -3453,52 +3455,53 @@ with col_spell2:
                         st.rerun()
                 else:
                     st.warning("Text too short for spell check (minimum 3 words)")
+    
+    elif has_content and showing_results:
+        # Show the results instead of the check button
+        result = st.session_state[spell_result_key]
         
-        # Display spellcheck results if they exist
-        if spell_result_key in st.session_state and st.session_state[spell_result_key].get("show", False):
-            result = st.session_state[spell_result_key]
+        if "corrected" in result:
+            st.markdown("### ✅ Suggested Corrections:")
+            st.markdown(f'<div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50;">{result["corrected"]}</div>', unsafe_allow_html=True)
             
-            if "corrected" in result:
-                st.markdown("### ✅ Suggested Corrections:")
-                st.markdown(f'<div style="background-color: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50;">{result["corrected"]}</div>', unsafe_allow_html=True)
-                
-                col_apply1, col_apply2, col_apply3 = st.columns([1, 1, 1])
-                with col_apply2:
-                    if st.button("📋 Apply Corrections", key=f"{spellcheck_base}_apply", type="primary", use_container_width=True):
-                        # Wrap in paragraph tags if needed
-                        corrected = result["corrected"]
-                        if not corrected.startswith('<p>'):
-                            corrected = f'<p>{corrected}</p>'
-                        
-                        # Update the content in session state
-                        st.session_state[content_key] = corrected
-                        
-                        # Save the response immediately
-                        save_response(current_session_id, current_question_text, corrected)
-                        
-                        # Increment the version to force Quill to remount with new content
-                        st.session_state[version_key] += 1
-                        
-                        # Clear the result
-                        st.session_state[spell_result_key] = {"show": False}
-                        
-                        st.success("✅ Corrections applied!")
-                        st.rerun()
+            col_apply1, col_apply2, col_apply3 = st.columns([1, 1, 1])
+            with col_apply2:
+                if st.button("📋 Apply Corrections", key=f"{spellcheck_base}_apply", type="primary", use_container_width=True):
+                    # Wrap in paragraph tags if needed
+                    corrected = result["corrected"]
+                    if not corrected.startswith('<p>'):
+                        corrected = f'<p>{corrected}</p>'
                     
-                    if st.button("❌ Dismiss", key=f"{spellcheck_base}_dismiss", use_container_width=True):
-                        st.session_state[spell_result_key] = {"show": False}
-                        st.rerun()
-            
-            elif "message" in result:
-                st.success(result["message"])
-                if st.button("Dismiss", key=f"{spellcheck_base}_dismiss_msg"):
+                    # Update the content in session state
+                    st.session_state[content_key] = corrected
+                    
+                    # Save the response immediately
+                    save_response(current_session_id, current_question_text, corrected)
+                    
+                    # Increment the version to force Quill to remount with new content
+                    st.session_state[version_key] += 1
+                    
+                    # Clear the result
+                    st.session_state[spell_result_key] = {"show": False}
+                    
+                    st.success("✅ Corrections applied!")
+                    st.rerun()
+                
+                if st.button("❌ Dismiss", key=f"{spellcheck_base}_dismiss", use_container_width=True):
                     st.session_state[spell_result_key] = {"show": False}
                     st.rerun()
+        
+        elif "message" in result:
+            st.success(result["message"])
+            if st.button("Dismiss", key=f"{spellcheck_base}_dismiss_msg"):
+                st.session_state[spell_result_key] = {"show": False}
+                st.rerun()
+    
     else:
+        # No content, show disabled button
         st.button("📝 Check Spelling & Grammar", key=f"{spellcheck_base}_disabled", disabled=True, use_container_width=True)
 
 st.markdown("---")
-
 # ============================================================================
 # SPELLCHECK BUTTON - Fixed to actually apply changes
 # ============================================================================
