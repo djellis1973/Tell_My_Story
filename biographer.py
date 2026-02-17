@@ -2925,6 +2925,70 @@ if st.session_state.get('show_profile_setup', False):
     
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
+# ============================================================================
+# VIGNETTE MANAGER FUNCTIONS - ADD THESE HERE
+# ============================================================================
+def show_vignette_manager():
+    if not VignetteManager: 
+        st.error("Vignette module not available"); 
+        st.session_state.show_vignette_manager = False; 
+        return
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    if st.button("←", key="vign_mgr_back"): 
+        st.session_state.show_vignette_manager = False; 
+        st.rerun()
+    st.title("📚 Your Vignettes")
+    if 'vignette_manager' not in st.session_state: 
+        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+    filter_map = {"All Stories": "all", "Published": "published", "Drafts": "drafts"}
+    filter_option = st.radio("Show:", ["All Stories", "Published", "Drafts"], horizontal=True, key="vign_filter")
+    st.session_state.vignette_manager.display_vignette_gallery(
+        filter_by=filter_map.get(filter_option, "all"),
+        on_select=on_vignette_select, 
+        on_edit=on_vignette_edit, 
+        on_delete=on_vignette_delete
+    )
+    st.divider()
+    if st.button("➕ Create New Vignette", type="primary", width='stretch'):
+        st.session_state.show_vignette_manager = False; 
+        st.session_state.show_vignette_modal = True; 
+        st.session_state.editing_vignette_id = None; 
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def show_vignette_detail():
+    if not VignetteManager or not st.session_state.get('selected_vignette_id'): 
+        st.session_state.show_vignette_detail = False
+        return
+    
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([6, 1])
+    with col1:
+        st.title("📖 Read Vignette")
+    with col2:
+        if st.button("✕", key="close_vignette_detail"):
+            st.session_state.show_vignette_detail = False
+            st.session_state.selected_vignette_id = None
+            st.rerun()
+    
+    if 'vignette_manager' not in st.session_state: 
+        st.session_state.vignette_manager = VignetteManager(st.session_state.user_id)
+    
+    vignette = st.session_state.vignette_manager.get_vignette_by_id(st.session_state.selected_vignette_id)
+    if not vignette: 
+        st.error("Vignette not found")
+        st.session_state.show_vignette_detail = False
+        return
+    
+    st.session_state.vignette_manager.display_full_vignette(
+        st.session_state.selected_vignette_id,
+        on_back=lambda: st.session_state.update(show_vignette_detail=False, selected_vignette_id=None),
+        on_edit=on_vignette_edit
+    )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
 
 # ============================================================================
 # MODAL HANDLING
