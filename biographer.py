@@ -3288,6 +3288,7 @@ if st.session_state.get('show_publisher', False):
         .main-header { display: none; }
         .sidebar-header { display: none; }
         .stApp header { display: none; }
+        section[data-testid="stSidebar"] { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
     
@@ -3301,7 +3302,7 @@ if st.session_state.get('show_publisher', False):
     </div>
     """, unsafe_allow_html=True)
     
-    # Back button - FIXED INDENTATION
+    # Back button
     col1, col2, col3 = st.columns([1, 6, 1])
     with col1:
         if st.button("← Back to Writing", use_container_width=True):
@@ -3367,13 +3368,8 @@ if st.session_state.get('show_publisher', False):
         with col2:
             include_toc = st.checkbox("📖 Table of Contents", value=True)
         with col3:
-            cover_type = st.radio(
-                "🎨 Cover",
-                ["simple", "custom"],
-                format_func=lambda x: "Gradient" if x == "simple" else "My Design",
-                horizontal=True,
-                disabled=not bool(cover_design)
-            )
+            # Just show cover type info, don't actually use it since we handle covers separately
+            st.info(f"Cover: {'Custom' if cover_design else 'Simple'}")
         
         # Summary stats
         col1, col2, col3, col4 = st.columns(4)
@@ -3414,7 +3410,7 @@ if st.session_state.get('show_publisher', False):
                         stories,
                         format_style,
                         include_toc,
-                        False,
+                        False,  # Don't include images separately since they're in stories
                         cover_image
                     )
                     filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
@@ -3440,7 +3436,7 @@ if st.session_state.get('show_publisher', False):
                         stories,
                         format_style,
                         include_toc,
-                        False,
+                        False,  # Don't include images separately since they're in stories
                         cover_html_path,
                         cover_image
                     )
