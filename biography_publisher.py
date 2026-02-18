@@ -17,7 +17,6 @@ import time
 # ============================================================================
 def show_celebration():
     """Show animated balloons when book is successfully generated"""
-    # Store in session state that we've shown balloons
     st.session_state.balloons_shown = True
     
     balloons_html = """
@@ -94,8 +93,6 @@ def show_celebration():
     <div class="balloon"></div>
     """
     st.components.v1.html(balloons_html, height=0)
-    
-    # Also use Streamlit's balloons after a tiny delay
     time.sleep(0.5)
     st.balloons()
 
@@ -148,10 +145,9 @@ def generate_docx(book_title, author_name, stories, format_style, include_toc=Tr
             if format_style == 'interview':
                 doc.add_heading(f'Q: {question}', 3)
                 doc.add_paragraph(answer_text)
-            else:  # biography format - just the answer
+            else:
                 doc.add_paragraph(answer_text)
             
-            # Embed images
             for img_data in images:
                 b64 = img_data.get('base64')
                 caption = img_data.get('caption', '')
@@ -178,33 +174,20 @@ def generate_docx(book_title, author_name, stories, format_style, include_toc=Tr
 # ============================================================================
 def generate_html(book_title, author_name, stories, format_style, include_toc=True, include_dates=False, cover_type="simple", custom_cover=None):
     """Generate HTML - USES THE HTML COVER"""
-     # ===== DEBUG CODE - ADD THIS =====
-    st.write("=== HTML GENERATION DEBUG ===")
-    st.write(f"cover_type: {cover_type}")
-    st.write(f"custom_cover exists: {custom_cover is not None}")
-    if custom_cover:
-        st.write(f"cover_html key exists: {'cover_html' in custom_cover}")
-        st.write(f"cover_html path: {custom_cover.get('cover_html', 'NOT FOUND')}")
-        if custom_cover.get('cover_html'):
-            st.write(f"File exists: {os.path.exists(custom_cover['cover_html'])}")
-    st.write("=============================")
-    # ===== END DEBUG CODE =====
+    
     cover_html = ""
     
     # ALWAYS use HTML cover if it exists
     if custom_cover and custom_cover.get('cover_html') and os.path.exists(custom_cover['cover_html']):
         try:
-            # Read the saved HTML cover file
             with open(custom_cover['cover_html'], 'r') as f:
                 full_cover_html = f.read()
             
-            # Extract JUST the cover part (between body tags)
             import re
             body_match = re.search(r'<body>(.*?)</body>', full_cover_html, re.DOTALL)
             if body_match:
                 cover_html = body_match.group(1)
             else:
-                # Fallback to simple header
                 cover_html = f"""
                 <div class="book-header">
                     <h1>{book_title}</h1>
@@ -219,7 +202,6 @@ def generate_html(book_title, author_name, stories, format_style, include_toc=Tr
             </div>
             """
     else:
-        # Simple text header
         cover_html = f"""
         <div class="book-header">
             <h1>{book_title}</h1>
@@ -352,7 +334,6 @@ def generate_html(book_title, author_name, stories, format_style, include_toc=Tr
             font-size: 12px;
             margin-top: 60px;
         }}
-        /* Cover styling from saved HTML */
         .cover-container {{
             width: 600px;
             height: 900px;
@@ -430,7 +411,6 @@ def main():
                         st.session_state.author_name = f"{first} {last}"
                         st.session_state.book_title = f"The Story of {first} {last}"
                 
-                # Load custom cover if available
                 if 'cover_design' in st.session_state.stories_data:
                     st.session_state.custom_cover_data = st.session_state.stories_data['cover_design']
             except Exception as e:
@@ -450,7 +430,6 @@ def main():
         
         st.session_state.include_toc = st.checkbox("Include Table of Contents", value=st.session_state.include_toc)
         
-        # Custom cover info
         if st.session_state.custom_cover_data:
             with st.expander("🎨 Custom Cover Preview"):
                 if st.session_state.custom_cover_data.get('cover_image') and os.path.exists(st.session_state.custom_cover_data['cover_image']):
@@ -463,40 +442,31 @@ def main():
         stories_data = st.session_state.stories_data
         stories = stories_data.get('stories', [])
         
-        # Summary
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Total Stories", len(stories))
-with col2:
-    if st.button("🌐 Generate HTML", type="primary", use_container_width=True):
-        # DEBUG - add this INSIDE the button block
-        st.write("=== BEFORE HTML GENERATION ===")
-        st.write(f"Session state keys: {list(st.session_state.keys())}")
-        if 'custom_cover_data' in st.session_state:
-            st.write(f"custom_cover_data exists: {st.session_state.custom_cover_data is not None}")
-        if 'cover_design' in st.session_state:
-            st.write(f"cover_design exists: {st.session_state.cover_design is not None}")
-        st.write("===============================")
+        with col2:
+            st.metric("Sessions", stories_data.get('summary', {}).get('total_sessions', 1))
+        with col3:
+            st.metric("Export Date", stories_data.get('export_date', 'Unknown')[:10])
         
-        with st.spinner("Creating HTML page..."):
-            html_content = generate_html(
-                st.session_state.book_title,
-                st.session_state.author_name,
-                stories,
-                st.session_state.format_style,
-                st.session_state.include_toc,
-                False,
-                "custom",
-                st.session_state.get('custom_cover_data', None)
-            )
+        with st.expander("📖 Preview Stories", expanded=False):
+            for i, story in enumerate(stories[:3]):
+                st.markdown(f"**{'Q: ' + story.get('question', '') if st.session_state.format_style == 'interview' else story.get('session_title', 'Session')}**")
+                st.markdown(f"*{story.get('answer_text', '')[:200]}...*")
+                if story.get('images'):
+                    st.caption(f"📸 {len(story['images'])} image(s) attached")
+                st.divider()
+            if len(stories) > 3:
+                st.info(f"... and {len(stories) - 3} more stories")
         
         # Generate buttons - NO PDF!
         st.subheader("🖨️ Generate Your Book")
-        col1, col2 = st.columns(2)  # Only 2 columns now
+        col1, col2 = st.columns(2)
         
         with col1:
             if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
-                with st.spinner("Creating Word document with images..."):
+                with st.spinner("Creating Word document..."):
                     docx_bytes = generate_docx(
                         st.session_state.book_title,
                         st.session_state.author_name,
@@ -504,8 +474,8 @@ with col2:
                         st.session_state.format_style,
                         st.session_state.include_toc,
                         False,
-                        "custom" if st.session_state.custom_cover_data else "simple",
-                        st.session_state.custom_cover_data
+                        "simple",
+                        None
                     )
                     filename = f"{st.session_state.book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
                     st.download_button(
@@ -516,9 +486,6 @@ with col2:
                         use_container_width=True,
                         key="docx_download"
                     )
-                    # Show celebration AFTER download button appears
-                    st.session_state.balloons_shown = False
-                    time.sleep(0.5)
                     show_celebration()
         
         with col2:
@@ -531,7 +498,7 @@ with col2:
                         st.session_state.format_style,
                         st.session_state.include_toc,
                         False,
-                        "custom" if st.session_state.custom_cover_data else "custom",
+                        "custom" if st.session_state.custom_cover_data else "simple",
                         st.session_state.custom_cover_data
                     )
                     filename = f"{st.session_state.book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
@@ -543,12 +510,8 @@ with col2:
                         use_container_width=True,
                         key="html_download"
                     )
-                    # Show celebration AFTER download button appears
-                    st.session_state.balloons_shown = False
-                    time.sleep(0.5)
                     show_celebration()
         
-        # Preview text
         if st.button("📄 Preview Text"):
             preview = f"{st.session_state.book_title}\nby {st.session_state.author_name}\n\n"
             for i, story in enumerate(stories[:5]):
