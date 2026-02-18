@@ -86,12 +86,13 @@ default_state = {
     "image_handler": None, "show_image_manager": False,
     "current_rewrite_data": None, "show_ai_rewrite": False, "show_ai_rewrite_menu": False,
     "editor_content": {}, "show_privacy_settings": False,
-    "beta_feedback_display": None, "beta_feedback_storage": {}
+    "beta_feedback_display": None, "beta_feedback_storage": {},
+    "show_cover_designer": False  # <-- ADD THIS LINE
 }
 for key, value in default_state.items():
     if key not in st.session_state:
         st.session_state[key] = value
-
+        
 # Load external CSS
 try:
     with open("styles.css", encoding="utf-8") as f:
