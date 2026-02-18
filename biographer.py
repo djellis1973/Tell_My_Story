@@ -27,7 +27,7 @@ st.set_page_config(page_title="Tell My Story - Your Life Timeline", page_icon="
 # IMPORT BIOGRAPHY PUBLISHER
 # ============================================================================
 try:
-    from biography_publisher import generate_pdf, generate_docx
+    from biography_publisher import generate_docx, generate_html
     PUBLISHER_AVAILABLE = True
 except ImportError as e:
     st.error(f"‚ùå Please ensure biography_publisher.py is in the same directory")
