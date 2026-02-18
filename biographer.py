@@ -8,7 +8,7 @@ import re
 import hashlib
 import smtplib
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from email.mime.multipart
 import secrets
 import string
 import time
@@ -3279,15 +3279,12 @@ else:
         else: 
             st.info("No matches found")
 # ============================================================================
-# PUBLISHER PAGE (Full screen, not in sidebar)
+# PUBLISHER PAGE - SHOW ON MAIN SCREEN WHEN ACTIVATED
 # ============================================================================
 if st.session_state.get('show_publisher', False):
-    # Hide the main header and show publisher full screen
+    # Hide sidebar when in publisher mode
     st.markdown("""
     <style>
-        .main-header { display: none; }
-        .sidebar-header { display: none; }
-        .stApp header { display: none; }
         section[data-testid="stSidebar"] { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -3295,19 +3292,19 @@ if st.session_state.get('show_publisher', False):
     # Import publisher functions
     from biography_publisher import generate_docx, generate_html, show_celebration
     
-    st.markdown("""
-    <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: -1rem -1rem 2rem -1rem; border-radius: 0 0 20px 20px; color: white;">
-        <h1>📚 Book Publisher</h1>
-        <p>Transform your stories into a beautifully formatted book</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Back button
+    # Back button at top
     col1, col2, col3 = st.columns([1, 6, 1])
     with col1:
         if st.button("← Back to Writing", use_container_width=True):
             st.session_state.show_publisher = False
             st.rerun()
+    
+    st.markdown("""
+    <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0 -1rem 2rem -1rem; border-radius: 0 0 20px 20px; color: white;">
+        <h1>📚 Book Publisher</h1>
+        <p>Transform your stories into a beautifully formatted book</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Get data from session state
     if st.session_state.get('publisher_data'):
@@ -3360,7 +3357,7 @@ if st.session_state.get('show_publisher', False):
                 st.image(uploaded_image, width=200, caption="Your cover image")
                 st.success("✅ Cover image ready")
         else:
-            st.session_state.cover_image_data = None  # Clear any previously uploaded image
+            st.session_state.cover_image_data = None
         
         # Summary stats
         st.markdown("---")
@@ -3398,7 +3395,6 @@ if st.session_state.get('show_publisher', False):
         with col1:
             if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
                 with st.spinner("Creating Word document..."):
-                    # Only pass cover image if user selected "uploaded"
                     cover_image = st.session_state.cover_image_data if cover_choice == "uploaded" else None
                     
                     docx_bytes = generate_docx(
@@ -3407,9 +3403,9 @@ if st.session_state.get('show_publisher', False):
                         stories,
                         format_style,
                         include_toc,
-                        True,  # include_images
+                        True,
                         cover_image,
-                        cover_choice  # Pass the user's choice
+                        cover_choice
                     )
                     filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
                     st.download_button(
@@ -3425,7 +3421,6 @@ if st.session_state.get('show_publisher', False):
         with col2:
             if st.button("🌐 Generate HTML", type="primary", use_container_width=True):
                 with st.spinner("Creating HTML page..."):
-                    # Only pass cover image if user selected "uploaded"
                     cover_image = st.session_state.cover_image_data if cover_choice == "uploaded" else None
                     
                     html_content = generate_html(
@@ -3434,10 +3429,10 @@ if st.session_state.get('show_publisher', False):
                         stories,
                         format_style,
                         include_toc,
-                        True,  # include_images
-                        None,  # No custom HTML cover
+                        True,
+                        None,
                         cover_image,
-                        cover_choice  # Pass the user's choice
+                        cover_choice
                     )
                     filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
                     st.download_button(
@@ -3456,8 +3451,9 @@ if st.session_state.get('show_publisher', False):
             st.session_state.show_publisher = False
             st.rerun()
     
-    # Stop here so we don't show the main content
+    # Stop here - don't show main content
     st.stop()
+
 # ============================================================================
 # MAIN CONTENT AREA
 # ============================================================================
