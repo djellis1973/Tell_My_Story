@@ -84,21 +84,23 @@ def show_celebration():
 # DOCX GENERATION
 # ============================================================================
 def generate_docx(book_title, author_name, stories, format_style, include_toc=True, include_dates=False, cover_image=None):
+    """Generate DOCX with optional uploaded cover image"""
     doc = Document()
     
-    # COVER: Use uploaded image OR simple text
-    if cover_image is not None:
+    if cover_image:
         try:
             img_stream = io.BytesIO(cover_image)
             doc.add_picture(img_stream, width=Inches(6))
             doc.add_page_break()
         except:
+            # Fallback to text
             title = doc.add_heading(book_title, 0)
             title.alignment = WD_ALIGN_PARAGRAPH.CENTER
             author = doc.add_paragraph(f'by {author_name}')
             author.alignment = WD_ALIGN_PARAGRAPH.CENTER
             doc.add_page_break()
     else:
+        # Text cover
         title = doc.add_heading(book_title, 0)
         title.alignment = WD_ALIGN_PARAGRAPH.CENTER
         author = doc.add_paragraph(f'by {author_name}')
@@ -159,105 +161,54 @@ def generate_docx(book_title, author_name, stories, format_style, include_toc=Tr
     doc.save(docx_bytes)
     docx_bytes.seek(0)
     return docx_bytes
-
+ 
 # ============================================================================
 # HTML GENERATION
 # ============================================================================
-def generate_html(book_title, author_name, stories, format_style, include_toc=True, include_dates=False, cover_image=None):
+def generate_html(book_title, author_name, stories, format_style, include_toc=True, include_dates=False, cover_html_path=None, cover_image=None):
+    """Generate HTML - can use designer HTML cover OR uploaded image"""
     
-    # COVER: Use uploaded image OR simple gradient
-    if cover_image is not None:
-        img_b64 = base64.b64encode(cover_image).decode()
-        cover_html = f'''
-        <div style="text-align:center; margin:0 auto 40px auto;">
-            <img src="data:image/jpeg;base64,{img_b64}" style="width:100%; max-width:600px; box-shadow:0 10px 20px rgba(0,0,0,0.3);">
-        </div>
-        <hr>
-        '''
+    cover_html = ""
+    
+    # OPTION 1: Use designer HTML cover if available
+    if cover_html_path and os.path.exists(cover_html_path):
+        try:
+            with open(cover_html_path, 'r') as f:
+                full_cover = f.read()
+            # Extract just the cover part
+            import re
+            body_match = re.search(r'<body>(.*?)</body>', full_cover, re.DOTALL)
+            if body_match:
+                cover_html = body_match.group(1)
+            else:
+                cover_html = full_cover
+        except:
+            cover_html = f"<h1>{book_title}</h1><p>by {author_name}</p>"
+    
+    # OPTION 2: Use uploaded image if available
+    elif cover_image:
+        try:
+            img_b64 = base64.b64encode(cover_image).decode()
+            cover_html = f'''
+            <div style="text-align:center; margin:40px 0;">
+                <img src="data:image/jpeg;base64,{img_b64}" style="max-width:100%; max-height:900px; box-shadow:0 10px 20px rgba(0,0,0,0.3);">
+            </div>
+            '''
+        except:
+            cover_html = f"<h1>{book_title}</h1><p>by {author_name}</p>"
+    
+    # OPTION 3: Simple gradient cover
     else:
         cover_html = f'''
         <div class="book-header">
             <h1>{book_title}</h1>
-            <div class="author">by {author_name}</div>
+            <p class="author">by {author_name}</p>
         </div>
         '''
     
-    # TOC
-    toc_html = ""
-    if include_toc and stories:
-        toc_html = "<h2>Table of Contents</h2><ul class='toc'>"
-        current_session = None
-        for i, story in enumerate(stories, 1):
-            session_id = story.get('session_id', '1')
-            if session_id != current_session:
-                session_title = story.get('session_title', f'Session {session_id}')
-                toc_html += f"<li class='toc-session'>{session_title}</li>"
-                current_session = session_id
-            question = story.get('question', f'Story {i}')
-            toc_html += f"<li class='toc-story'><a href='#story-{i}'>{i}. {question}</a></li>"
-        toc_html += "</ul><hr>"
+    # Rest of your HTML generation code...
+    # (keep all your existing TOC, content, and styling)
     
-    # Content
-    content_html = ""
-    current_session = None
-    for i, story in enumerate(stories, 1):
-        session_id = story.get('session_id', '1')
-        if session_id != current_session:
-            session_title = story.get('session_title', f'Session {session_id}')
-            content_html += f"<h1 class='session-title'>{session_title}</h1>"
-            current_session = session_id
-        
-        question = story.get('question', '')
-        answer_text = story.get('answer_text', '')
-        images = story.get('images', [])
-        
-        content_html += f"<div class='story' id='story-{i}'>"
-        if format_style == 'interview':
-            content_html += f"<h2 class='question'>Q: {question}</h2>"
-        
-        for p in answer_text.split('\n'):
-            if p.strip():
-                content_html += f"<p>{p}</p>"
-        
-        if images:
-            content_html += "<div class='image-gallery'>"
-            for img_data in images:
-                b64 = img_data.get('base64')
-                caption = img_data.get('caption', '')
-                if b64:
-                    content_html += f"""
-                    <div class='image-item'>
-                        <img src='data:image/jpeg;base64,{b64}'>
-                        <div class='image-caption'>📝 {caption}</div>
-                    </div>
-                    """
-            content_html += "</div>"
-        content_html += "</div><hr>"
-    
-    # Final HTML
-    html = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>{book_title}</title>
-<style>
-    body {{ font-family: Georgia, serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; background: #fafafa; }}
-    .book-header {{ text-align: center; padding: 60px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin: -40px -20px 40px -20px; }}
-    .session-title {{ color: #764ba2; border-bottom: 2px solid #667eea; }}
-    .question {{ color: #667eea; font-style: italic; }}
-    .image-gallery {{ display: flex; flex-wrap: wrap; gap: 20px; }}
-    .image-item {{ flex: 1 1 300px; background: white; padding: 15px; border-radius: 10px; }}
-    .image-item img {{ max-width: 100%; }}
-    .toc {{ background: white; padding: 30px; border-radius: 10px; }}
-    .toc-session {{ font-weight: bold; color: #667eea; }}
-    hr {{ margin: 40px 0; }}
-</style>
-</head>
-<body>
-    {cover_html}
-    {toc_html}
-    <div class="content">{content_html}</div>
-    <div class="footer" style="text-align:center; color:#999;">Generated by Tell My Story • {datetime.now().year}</div>
-</body>
-</html>"""
     return html
 
 # ============================================================================
