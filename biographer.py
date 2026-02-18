@@ -27,7 +27,7 @@ st.set_page_config(page_title="Tell My Story - Your Life Timeline", page_icon="�
 # IMPORT BIOGRAPHY PUBLISHER
 # ============================================================================
 try:
-    from biography_publisher import generate_docx, generate_html, show_celebration
+    from biography_publisher import generate_docx, generate_html
     PUBLISHER_AVAILABLE = True
 except ImportError as e:
     st.error(f"❌ Please ensure biography_publisher.py is in the same directory")
@@ -93,7 +93,7 @@ default_state = {
     "current_rewrite_data": None, "show_ai_rewrite": False, "show_ai_rewrite_menu": False,
     "editor_content": {}, "show_privacy_settings": False, "show_cover_designer": False,
     "beta_feedback_display": None, "beta_feedback_storage": {},
-    "auth_tab": 'login', "show_publisher": False, "cover_image_data": None, "publisher_data": None
+    "auth_tab": 'login'  # Added for authentication
 }
 for key, value in default_state.items():
     if key not in st.session_state:
@@ -533,7 +533,7 @@ def logout_user():
             'current_bank_type', 'current_bank_id', 'show_bank_manager', 'show_bank_editor',
             'editing_bank_id', 'editing_bank_name', 'show_image_manager', 'editor_content',
             'current_rewrite_data', 'show_ai_rewrite', 'show_ai_rewrite_menu',
-            'show_publisher']
+            'show_publisher']  # <-- ADD THIS
     for key in keys:
         if key in st.session_state: 
             del st.session_state[key]
@@ -953,7 +953,6 @@ def show_cover_designer():
     
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
-
 # ============================================================================
 # NARRATIVE GPS HELPER FUNCTIONS
 # ============================================================================
@@ -3138,84 +3137,92 @@ with st.sidebar:
         st.session_state.show_session_creator = True
         st.rerun()
     
-    # ============================================================================
-    # PUBLISH YOUR BOOK SECTION
-    # ============================================================================
-    st.divider()
-    st.subheader("📤 Publish Your Book")
+# In biographer.py - Replace the entire export section in the sidebar with this:
 
-    if st.session_state.logged_in and st.session_state.user_id:
-        # Prepare export data for the publisher
-        export_data = []
-        for session in SESSIONS:
-            sid = session["id"]
-            sdata = st.session_state.responses.get(sid, {})
-            for q, a in sdata.get("questions", {}).items():
-                images_with_data = []
-                if a.get("images"):
-                    for img_ref in a.get("images", []):
-                        img_id = img_ref.get("id")
-                        b64 = st.session_state.image_handler.get_image_base64(img_id) if st.session_state.image_handler else None
-                        caption = img_ref.get("caption", "")
-                        if b64:
-                            images_with_data.append({
-                                "id": img_id, "base64": b64, "caption": caption
-                            })
-                
-                export_item = {
-                    "question": q, 
-                    "answer_text": re.sub(r'<[^>]+>', '', a.get("answer", "")),
-                    "timestamp": a.get("timestamp", ""), 
-                    "session_id": sid, 
-                    "session_title": session["title"],
-                    "has_images": a.get("has_images", False), 
-                    "image_count": a.get("image_count", 0),
-                    "images": images_with_data
-                }
-                export_data.append(export_item)
-        
-        if export_data:
-            # Save export data to session state for the publisher
-            complete_data = {
-                "user": st.session_state.user_id, 
-                "user_profile": st.session_state.user_account.get('profile', {}),
-                "narrative_gps": st.session_state.user_account.get('narrative_gps', {}),
-                "enhanced_profile": st.session_state.user_account.get('enhanced_profile', {}),
-                "cover_design": st.session_state.user_account.get('cover_design', {}),
-                "stories": export_data, 
-                "export_date": datetime.now().isoformat(),
-                "summary": {
-                    "total_stories": len(export_data), 
-                    "total_sessions": len(set(s['session_id'] for s in export_data))
-                }
+# ============================================================================
+# IN THE SIDEBAR - Replace the old export section with just a link to publisher
+# ============================================================================
+
+st.divider()
+st.subheader("📤 Publish Your Book")
+
+if st.session_state.logged_in and st.session_state.user_id:
+    # Prepare export data for the publisher
+    export_data = []
+    for session in SESSIONS:
+        sid = session["id"]
+        sdata = st.session_state.responses.get(sid, {})
+        for q, a in sdata.get("questions", {}).items():
+            images_with_data = []
+            if a.get("images"):
+                for img_ref in a.get("images", []):
+                    img_id = img_ref.get("id")
+                    b64 = st.session_state.image_handler.get_image_base64(img_id) if st.session_state.image_handler else None
+                    caption = img_ref.get("caption", "")
+                    if b64:
+                        images_with_data.append({
+                            "id": img_id, "base64": b64, "caption": caption
+                        })
+            
+            export_item = {
+                "question": q, 
+                "answer_text": re.sub(r'<[^>]+>', '', a.get("answer", "")),
+                "timestamp": a.get("timestamp", ""), 
+                "session_id": sid, 
+                "session_title": session["title"],
+                "has_images": a.get("has_images", False), 
+                "image_count": a.get("image_count", 0),
+                "images": images_with_data
             }
-            
-            # Store in session state for the publisher
-            st.session_state.publisher_data = complete_data
-            
-            # Button to open publisher in main screen
-            if st.button("📚 Open Book Publisher", type="primary", use_container_width=True):
-                st.session_state.show_publisher = True
-                st.rerun()
-            
-            # Optional: Keep JSON backup
-            with st.expander("📦 JSON Backup", expanded=False):
-                json_data = json.dumps(complete_data, indent=2)
-                st.download_button(
-                    label="📥 Download JSON Backup", 
-                    data=json_data,
-                    file_name=f"Tell_My_Story_Backup_{st.session_state.user_id}.json",
-                    mime="application/json", 
-                    use_container_width=True
-                )
-        else: 
-            st.warning("No stories yet! Start writing to publish.")
-    else: 
-        st.warning("Please log in to export your data.")
+            export_data.append(export_item)
     
-    # ============================================================================
-    # CLEAR DATA SECTION
-    # ============================================================================
+    if export_data:
+        # Save export data to session state for the publisher
+        complete_data = {
+            "user": st.session_state.user_id, 
+            "user_profile": st.session_state.user_account.get('profile', {}),
+            "narrative_gps": st.session_state.user_account.get('narrative_gps', {}),
+            "enhanced_profile": st.session_state.user_account.get('enhanced_profile', {}),
+            "cover_design": st.session_state.user_account.get('cover_design', {}),
+            "stories": export_data, 
+            "export_date": datetime.now().isoformat(),
+            "summary": {
+                "total_stories": len(export_data), 
+                "total_sessions": len(set(s['session_id'] for s in export_data))
+            }
+        }
+        
+        # Save to a temp file and store path in session state
+        temp_file = f"temp_export_{st.session_state.user_id}.json"
+        with open(temp_file, 'w') as f:
+            json.dump(complete_data, f)
+        
+        # Store in session state for the publisher
+        st.session_state.publisher_data = complete_data
+        st.session_state.publisher_data_path = temp_file
+        
+        # Button to open publisher in new tab/page
+        if st.button("📚 Open Book Publisher", type="primary", use_container_width=True):
+            # Save the current page state
+            st.session_state.return_to_main = True
+            st.session_state.show_publisher = True
+            st.rerun()
+        
+        # Optional: Keep JSON backup
+        with st.expander("📦 JSON Backup", expanded=False):
+            json_data = json.dumps(complete_data, indent=2)
+            st.download_button(
+                label="📥 Download JSON Backup", 
+                data=json_data,
+                file_name=f"Tell_My_Story_Backup_{st.session_state.user_id}.json",
+                mime="application/json", 
+                use_container_width=True
+            )
+    else: 
+        st.warning("No stories yet! Start writing to publish.")
+else: 
+    st.warning("Please log in to export your data.")
+    
     st.divider()
     st.subheader("⚠️ Clear Data")
     if st.session_state.confirming_clear == "session":
@@ -3248,9 +3255,6 @@ with st.sidebar:
             st.session_state.confirming_clear = "all"
             st.rerun()
     
-    # ============================================================================
-    # SEARCH SECTION
-    # ============================================================================
     st.divider()
     st.subheader("🔍 Search Your Stories")
     search_query = st.text_input("Search answers & captions...", placeholder="e.g., childhood, wedding, photo", key="global_search")
@@ -3274,14 +3278,16 @@ with st.sidebar:
                     st.info(f"... and {len(results)-10} more matches")
         else: 
             st.info("No matches found")
-
 # ============================================================================
-# PUBLISHER PAGE - SHOW ON MAIN SCREEN WHEN ACTIVATED
+# PUBLISHER PAGE (Full screen, not in sidebar)
 # ============================================================================
 if st.session_state.get('show_publisher', False):
-    # Hide sidebar when in publisher mode
+    # Hide the main header and show publisher full screen
     st.markdown("""
     <style>
+        .main-header { display: none; }
+        .sidebar-header { display: none; }
+        .stApp header { display: none; }
         section[data-testid="stSidebar"] { display: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -3289,19 +3295,19 @@ if st.session_state.get('show_publisher', False):
     # Import publisher functions
     from biography_publisher import generate_docx, generate_html, show_celebration
     
-    # Back button at top
+    st.markdown("""
+    <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: -1rem -1rem 2rem -1rem; border-radius: 0 0 20px 20px; color: white;">
+        <h1>📚 Book Publisher</h1>
+        <p>Transform your stories into a beautifully formatted book</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Back button
     col1, col2, col3 = st.columns([1, 6, 1])
     with col1:
         if st.button("← Back to Writing", use_container_width=True):
             st.session_state.show_publisher = False
             st.rerun()
-    
-    st.markdown("""
-    <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0 -1rem 2rem -1rem; border-radius: 0 0 20px 20px; color: white;">
-        <h1>📚 Book Publisher</h1>
-        <p>Transform your stories into a beautifully formatted book</p>
-    </div>
-    """, unsafe_allow_html=True)
     
     # Get data from session state
     if st.session_state.get('publisher_data'):
@@ -3354,7 +3360,7 @@ if st.session_state.get('show_publisher', False):
                 st.image(uploaded_image, width=200, caption="Your cover image")
                 st.success("✅ Cover image ready")
         else:
-            st.session_state.cover_image_data = None
+            st.session_state.cover_image_data = None  # Clear any previously uploaded image
         
         # Summary stats
         st.markdown("---")
@@ -3392,6 +3398,7 @@ if st.session_state.get('show_publisher', False):
         with col1:
             if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
                 with st.spinner("Creating Word document..."):
+                    # Only pass cover image if user selected "uploaded"
                     cover_image = st.session_state.cover_image_data if cover_choice == "uploaded" else None
                     
                     docx_bytes = generate_docx(
@@ -3400,9 +3407,9 @@ if st.session_state.get('show_publisher', False):
                         stories,
                         format_style,
                         include_toc,
-                        True,
+                        True,  # include_images
                         cover_image,
-                        cover_choice
+                        cover_choice  # Pass the user's choice
                     )
                     filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
                     st.download_button(
@@ -3418,6 +3425,7 @@ if st.session_state.get('show_publisher', False):
         with col2:
             if st.button("🌐 Generate HTML", type="primary", use_container_width=True):
                 with st.spinner("Creating HTML page..."):
+                    # Only pass cover image if user selected "uploaded"
                     cover_image = st.session_state.cover_image_data if cover_choice == "uploaded" else None
                     
                     html_content = generate_html(
@@ -3426,10 +3434,10 @@ if st.session_state.get('show_publisher', False):
                         stories,
                         format_style,
                         include_toc,
-                        True,
-                        None,
+                        True,  # include_images
+                        None,  # No custom HTML cover
                         cover_image,
-                        cover_choice
+                        cover_choice  # Pass the user's choice
                     )
                     filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
                     st.download_button(
@@ -3448,11 +3456,10 @@ if st.session_state.get('show_publisher', False):
             st.session_state.show_publisher = False
             st.rerun()
     
-    # Stop here - don't show main content
+    # Stop here so we don't show the main content
     st.stop()
-
 # ============================================================================
-# MAIN CONTENT AREA - Only shown when NOT in publisher mode
+# MAIN CONTENT AREA
 # ============================================================================
 
 if (st.session_state.show_vignette_modal or 
