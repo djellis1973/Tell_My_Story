@@ -3309,7 +3309,26 @@ if st.session_state.get('show_publisher', False):
         if st.button("← Back to Writing", use_container_width=True):
             st.session_state.show_publisher = False
             st.rerun()
-    
+
+# ===== ADD THIS IMAGE UPLOAD SECTION HERE =====
+st.markdown("---")
+st.markdown("### 🖼️ Upload Cover Image (Optional)")
+st.markdown("Upload a JPG or PNG - it will become your book cover")
+
+uploaded_image = st.file_uploader("Choose an image", type=['jpg', 'jpeg', 'png'], key="publisher_image_upload")
+if uploaded_image:
+    st.session_state.cover_image_data = uploaded_image.getvalue()
+    st.image(uploaded_image, width=200, caption="Your cover image")
+    st.success("✅ Cover image ready")
+st.markdown("---")
+# ===== END IMAGE UPLOAD SECTION =====
+
+# Get data from session state
+if st.session_state.get('publisher_data'):
+    data = st.session_state.publisher_data
+    stories = data.get('stories', [])
+    user_profile = data.get('user_profile', {})
+    cover_design = data.get('cover_design', {})
     # Get data from session state
     if st.session_state.get('publisher_data'):
         data = st.session_state.publisher_data
@@ -3387,35 +3406,65 @@ if st.session_state.get('show_publisher', False):
                     st.caption(f"📸 {len(story['images'])} image(s)")
                 st.divider()
         
-        # Generate buttons
-        st.markdown("---")
-        st.markdown("### 🖨️ Generate Your Book")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
-                with st.spinner("Creating Word document with images..."):
-                    docx_bytes = generate_docx(
-                        book_title,
-                        book_author,
-                        stories,
-                        format_style,
-                        include_toc,
-                        False,
-                        cover_type,
-                        cover_design if cover_type == "custom" else None
-                    )
-                    filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
-                    st.download_button(
-                        "📥 Download DOCX", 
-                        data=docx_bytes, 
-                        file_name=filename, 
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                        use_container_width=True,
-                        key="docx_download"
-                    )
-                    show_celebration()
+       # Generate buttons
+st.markdown("---")
+st.markdown("### 🖨️ Generate Your Book")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
+        with st.spinner("Creating Word document with images..."):
+            # Get the cover image data if uploaded
+            cover_image = st.session_state.get('cover_image_data')
+            
+            docx_bytes = generate_docx(
+                book_title,
+                book_author,
+                stories,
+                format_style,
+                include_toc,
+                False,
+                cover_image  # Pass the image data
+            )
+            filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
+            st.download_button(
+                "📥 Download DOCX", 
+                data=docx_bytes, 
+                file_name=filename, 
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                use_container_width=True,
+                key="docx_download"
+            )
+            show_celebration()
+
+with col2:
+    if st.button("🌐 Generate HTML", type="primary", use_container_width=True):
+        with st.spinner("Creating HTML page..."):
+            # Get the cover HTML path from designer AND image data from upload
+            cover_html_path = cover_design.get('cover_html') if cover_design else None
+            cover_image = st.session_state.get('cover_image_data')
+            
+            html_content = generate_html(
+                book_title,
+                book_author,
+                stories,
+                format_style,
+                include_toc,
+                False,
+                cover_html_path,  # Pass the HTML cover path
+                cover_image        # Pass the uploaded image data
+            )
+            filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
+            st.download_button(
+                "📥 Download HTML", 
+                data=html_content, 
+                file_name=filename, 
+                mime="text/html", 
+                use_container_width=True,
+                key="html_download"
+            )
+            show_celebration()
         
                 
         with col2:
