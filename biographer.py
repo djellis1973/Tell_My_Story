@@ -3391,7 +3391,7 @@ if st.session_state.get('show_publisher', False):
         st.markdown("---")
         st.markdown("### 🖨️ Generate Your Book")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
@@ -3417,31 +3417,8 @@ if st.session_state.get('show_publisher', False):
                     )
                     show_celebration()
         
+                
         with col2:
-            if st.button("📕 Generate PDF", type="primary", use_container_width=True):
-                with st.spinner("Creating PDF with images..."):
-                    pdf_bytes = generate_pdf(
-                        book_title,
-                        book_author,
-                        stories,
-                        format_style,
-                        include_toc,
-                        False,
-                        cover_type,
-                        cover_design if cover_type == "custom" else None
-                    )
-                    filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
-                    st.download_button(
-                        "📥 Download PDF", 
-                        data=pdf_bytes, 
-                        file_name=filename, 
-                        mime="application/pdf", 
-                        use_container_width=True,
-                        key="pdf_download"
-                    )
-                    show_celebration()
-        
-        with col3:
             if st.button("🌐 Generate HTML", type="primary", use_container_width=True):
                 with st.spinner("Creating HTML page..."):
                     html_content = generate_html(
