@@ -468,6 +468,14 @@ def main():
         with col1:
             st.metric("Total Stories", len(stories))
         with col2:
+                # DEBUG - add this
+    st.write("=== BEFORE HTML GENERATION ===")
+    st.write(f"Session state keys: {list(st.session_state.keys())}")
+    if hasattr(st.session_state, 'custom_cover_data'):
+        st.write(f"custom_cover_data exists: {st.session_state.custom_cover_data is not None}")
+    if hasattr(st.session_state, 'cover_design'):
+        st.write(f"cover_design exists: {st.session_state.cover_design is not None}")
+    st.write("===============================")
             st.metric("Sessions", stories_data.get('summary', {}).get('total_sessions', 1))
         with col3:
             st.metric("Export Date", stories_data.get('export_date', 'Unknown')[:10])
