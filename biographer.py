@@ -589,7 +589,7 @@ def show_privacy_settings():
     st.stop()
 
 # ============================================================================
-# FIXED COVER DESIGNER - Now generates and saves COMPLETE cover as image
+# FIXED COVER DESIGNER - Now generates and saves COMPLETE cover as JPG
 # ============================================================================
 def show_cover_designer():
     st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
@@ -746,85 +746,86 @@ def show_cover_designer():
         
         st.caption("6\" wide × 9\" tall (portrait format)")
     
-    # Save button - now generates and saves the COMPLETE cover as an image
+    # Save button - generates and saves COMPLETE cover as JPG
     if st.button("💾 Save Cover Design", type="primary", use_container_width=True):
-        with st.spinner("Generating complete cover image..."):
+        with st.spinner("🎨 Generating complete cover image..."):
             try:
-                # Create a high-resolution image of the complete cover
                 from PIL import Image, ImageDraw, ImageFont
                 import io
                 
-                # Create a blank image with the correct aspect ratio (6:9 = 2:3)
-                # Use high resolution for print quality
+                # High resolution for print quality
                 img_width = 1200
                 img_height = 1800
                 
+                # Create the base image
                 if use_image and img_bytes:
                     # Use uploaded/saved image as background
                     background = Image.open(io.BytesIO(img_bytes))
-                    # Resize background to fit
                     background = background.resize((img_width, img_height), Image.Resampling.LANCZOS)
                     img = background.convert('RGBA')
                     
-                    # Add semi-transparent overlay
-                    overlay = Image.new('RGBA', (img_width, img_height), (0, 0, 0, 77))  # 30% opacity
+                    # Add semi-transparent overlay for text readability
+                    overlay = Image.new('RGBA', (img_width, img_height), (0, 0, 0, 77))
                     img = Image.alpha_composite(img, overlay)
+                    text_color = (255, 255, 255, 255)  # White text for images
                 else:
-                    # Create solid color background
+                    # Solid color background
                     bg_rgb = tuple(int(background_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
                     img = Image.new('RGBA', (img_width, img_height), bg_rgb + (255,))
+                    text_color = tuple(int(title_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (255,)
                 
                 # Create drawing context
                 draw = ImageDraw.Draw(img)
                 
-                # Use default font (simpler, less error-prone)
+                # Use default font (simpler, more reliable)
                 try:
-                    # Try to use a slightly larger default font
-                    title_font = ImageFont.load_default()
-                    subtitle_font = ImageFont.load_default()
-                    author_font = ImageFont.load_default()
+                    # Try to get a default font
+                    font = ImageFont.load_default()
                 except:
-                    title_font = ImageFont.load_default()
-                    subtitle_font = ImageFont.load_default()
-                    author_font = ImageFont.load_default()
+                    font = ImageFont.load_default()
                 
-                # Text color - white for image backgrounds, selected color for solid
-                if use_image:
-                    text_color = (255, 255, 255, 255)
-                else:
-                    text_color = tuple(int(title_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4)) + (255,)
-                
-                # Calculate text positions (centered approximately)
-                # Title at 1/3 down
-                title_y = img_height // 3
-                draw.text((img_width//2, title_y), title, fill=text_color, font=title_font, anchor="mm")
+                # Calculate text positions (centered)
+                # Title - approximately 1/3 down
+                bbox = draw.textbbox((0, 0), title, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                title_x = (img_width - text_width) // 2
+                title_y = img_height // 3 - text_height // 2
+                draw.text((title_x, title_y), title, fill=text_color, font=font)
                 
                 # Subtitle if exists
                 if subtitle:
-                    subtitle_y = title_y + 80
-                    draw.text((img_width//2, subtitle_y), subtitle, fill=text_color, font=subtitle_font, anchor="mm")
+                    bbox = draw.textbbox((0, 0), subtitle, font=font)
+                    text_width = bbox[2] - bbox[0]
+                    subtitle_x = (img_width - text_width) // 2
+                    subtitle_y = title_y + text_height + 20
+                    draw.text((subtitle_x, subtitle_y), subtitle, fill=text_color, font=font)
                 
                 # Author at bottom
                 author_text = f"by {author}"
-                author_y = img_height - 200
-                draw.text((img_width//2, author_y), author_text, fill=text_color, font=author_font, anchor="mm")
+                bbox = draw.textbbox((0, 0), author_text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                author_x = (img_width - text_width) // 2
+                author_y = img_height - 200 - text_height
+                draw.text((author_x, author_y), author_text, fill=text_color, font=font)
                 
-                # Save the complete cover image
+                # Save as JPG
                 cover_filename = f"uploads/covers/{st.session_state.user_id}_cover_complete.jpg"
                 os.makedirs("uploads/covers", exist_ok=True)
                 
-                # Convert to RGB for saving as JPEG
+                # Convert to RGB for JPG saving
                 rgb_img = Image.new('RGB', img.size, (255, 255, 255))
                 rgb_img.paste(img, mask=img.split()[3])  # Use alpha as mask
                 rgb_img.save(cover_filename, 'JPEG', quality=95)
                 
-                # Also save a thumbnail for preview
+                # Create thumbnail
                 thumb_filename = f"uploads/covers/{st.session_state.user_id}_cover_thumb.jpg"
                 thumbnail = rgb_img.copy()
                 thumbnail.thumbnail((300, 450), Image.Resampling.LANCZOS)
                 thumbnail.save(thumb_filename, 'JPEG', quality=85)
                 
-                # Update user account with cover design data
+                # Save design data (without font objects)
                 if 'cover_design' not in st.session_state.user_account:
                     st.session_state.user_account['cover_design'] = {}
                 
@@ -833,7 +834,7 @@ def show_cover_designer():
                     "subtitle": subtitle,
                     "author": author,
                     "cover_type": cover_type,
-                    "title_font": title_font,
+                    "title_font": title_font,  # Store as string, not font object
                     "title_color": title_color,
                     "background_color": background_color,
                     "cover_image": cover_filename,
@@ -842,12 +843,16 @@ def show_cover_designer():
                 })
                 
                 save_account_data(st.session_state.user_account)
-                st.success("✅ Complete cover design saved!")
+                
+                # Show success message
+                st.success("✅ Cover design saved successfully!")
+                st.balloons()  # Add some celebration
+                time.sleep(2)
                 st.rerun()
                 
             except Exception as e:
                 st.error(f"Error generating cover: {str(e)}")
-                # Fallback to just saving the data
+                # Fallback: save just the data
                 if 'cover_design' not in st.session_state.user_account:
                     st.session_state.user_account['cover_design'] = {}
                 
@@ -870,13 +875,12 @@ def show_cover_designer():
                     st.session_state.user_account['cover_design']['cover_image'] = cover_path
                 
                 save_account_data(st.session_state.user_account)
-                st.success("Cover design data saved (image generation failed, but data saved)!")
-                time.sleep(1)
+                st.warning("Cover data saved (image generation had issues, but your settings are saved)")
+                time.sleep(2)
                 st.rerun()
     
     st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
-
 # ============================================================================
 # NARRATIVE GPS HELPER FUNCTIONS
 # ============================================================================
