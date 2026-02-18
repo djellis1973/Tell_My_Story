@@ -103,31 +103,17 @@ def show_celebration():
 # DOCX GENERATION 
 # ============================================================================
 def generate_docx(book_title, author_name, stories, format_style, include_toc=True, include_dates=False, cover_type="simple", custom_cover=None):
-    """Generate DOCX with embedded images"""
+    """Generate DOCX with embedded images - SIMPLE TEXT COVER ONLY"""
     doc = Document()
     
-    # Title page - use full cover image if available
-    if cover_type == "custom" and custom_cover and custom_cover.get('cover_image') and os.path.exists(custom_cover['cover_image']):
-        # Add the full cover image - no text overlay
-        try:
-            doc.add_picture(custom_cover['cover_image'], width=Inches(6))
-            doc.add_page_break()
-        except Exception as e:
-            # Fallback to text title
-            title = doc.add_heading(book_title, 0)
-            title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            author = doc.add_paragraph(f'by {author_name}')
-            author.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            doc.add_page_break()
-    else:
-        # Simple text title
-        title = doc.add_heading(book_title, 0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        author = doc.add_paragraph(f'by {author_name}')
-        author.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        date_para = doc.add_paragraph(f'Generated on {datetime.now().strftime("%B %d, %Y")}')
-        date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        doc.add_page_break()
+    # SIMPLE TEXT TITLE ONLY - NO JPG COVER
+    title = doc.add_heading(book_title, 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    author = doc.add_paragraph(f'by {author_name}')
+    author.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    date_para = doc.add_paragraph(f'Generated on {datetime.now().strftime("%B %d, %Y")}')
+    date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    doc.add_page_break()
     
     # TOC
     if include_toc and stories:
