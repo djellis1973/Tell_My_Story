@@ -524,7 +524,7 @@ def main():
                         st.session_state.format_style,
                         st.session_state.include_toc,
                         False,
-                        "custom" if st.session_state.custom_cover_data else "simple",
+                        "custom" if st.session_state.custom_cover_data else "custom",
                         st.session_state.custom_cover_data
                     )
                     filename = f"{st.session_state.book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
