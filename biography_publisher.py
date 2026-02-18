@@ -467,29 +467,28 @@ def main():
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Total Stories", len(stories))
-        with col2:
-                # DEBUG - add this
-    st.write("=== BEFORE HTML GENERATION ===")
-    st.write(f"Session state keys: {list(st.session_state.keys())}")
-    if hasattr(st.session_state, 'custom_cover_data'):
-        st.write(f"custom_cover_data exists: {st.session_state.custom_cover_data is not None}")
-    if hasattr(st.session_state, 'cover_design'):
-        st.write(f"cover_design exists: {st.session_state.cover_design is not None}")
-    st.write("===============================")
-            st.metric("Sessions", stories_data.get('summary', {}).get('total_sessions', 1))
-        with col3:
-            st.metric("Export Date", stories_data.get('export_date', 'Unknown')[:10])
+with col2:
+    if st.button("🌐 Generate HTML", type="primary", use_container_width=True):
+        # DEBUG - add this INSIDE the button block
+        st.write("=== BEFORE HTML GENERATION ===")
+        st.write(f"Session state keys: {list(st.session_state.keys())}")
+        if 'custom_cover_data' in st.session_state:
+            st.write(f"custom_cover_data exists: {st.session_state.custom_cover_data is not None}")
+        if 'cover_design' in st.session_state:
+            st.write(f"cover_design exists: {st.session_state.cover_design is not None}")
+        st.write("===============================")
         
-        # Preview
-        with st.expander("📖 Preview Stories", expanded=False):
-            for i, story in enumerate(stories[:3]):
-                st.markdown(f"**{'Q: ' + story.get('question', '') if st.session_state.format_style == 'interview' else story.get('session_title', 'Session')}**")
-                st.markdown(f"*{story.get('answer_text', '')[:200]}...*")
-                if story.get('images'):
-                    st.caption(f"📸 {len(story['images'])} image(s) attached")
-                st.divider()
-            if len(stories) > 3:
-                st.info(f"... and {len(stories) - 3} more stories")
+        with st.spinner("Creating HTML page..."):
+            html_content = generate_html(
+                st.session_state.book_title,
+                st.session_state.author_name,
+                stories,
+                st.session_state.format_style,
+                st.session_state.include_toc,
+                False,
+                "custom",
+                st.session_state.get('custom_cover_data', None)
+            )
         
         # Generate buttons - NO PDF!
         st.subheader("🖨️ Generate Your Book")
