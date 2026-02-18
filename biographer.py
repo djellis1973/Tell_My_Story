@@ -18,10 +18,6 @@ from PIL import Image
 import io
 import zipfile
 
-import os
-st.write("Current directory:", os.getcwd())
-st.write("Files in directory:", os.listdir())
-
 # ============================================================================
 # PAGE CONFIG - MUST BE FIRST
 # ============================================================================
