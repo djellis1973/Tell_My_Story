@@ -178,7 +178,17 @@ def generate_docx(book_title, author_name, stories, format_style, include_toc=Tr
 # ============================================================================
 def generate_html(book_title, author_name, stories, format_style, include_toc=True, include_dates=False, cover_type="simple", custom_cover=None):
     """Generate HTML - USES THE HTML COVER"""
-    
+     # ===== DEBUG CODE - ADD THIS =====
+    st.write("=== HTML GENERATION DEBUG ===")
+    st.write(f"cover_type: {cover_type}")
+    st.write(f"custom_cover exists: {custom_cover is not None}")
+    if custom_cover:
+        st.write(f"cover_html key exists: {'cover_html' in custom_cover}")
+        st.write(f"cover_html path: {custom_cover.get('cover_html', 'NOT FOUND')}")
+        if custom_cover.get('cover_html'):
+            st.write(f"File exists: {os.path.exists(custom_cover['cover_html'])}")
+    st.write("=============================")
+    # ===== END DEBUG CODE =====
     cover_html = ""
     
     # ALWAYS use HTML cover if it exists
