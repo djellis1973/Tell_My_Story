@@ -177,32 +177,35 @@ def generate_docx(book_title, author_name, stories, format_style, include_toc=Tr
 # HTML GENERATION 
 # ============================================================================
 def generate_html(book_title, author_name, stories, format_style, include_toc=True, include_dates=False, cover_type="simple", custom_cover=None):
-    """Generate beautiful HTML with embedded images"""
+    """Generate HTML - USES THE HTML COVER"""
     
     cover_html = ""
     
-    # Use custom cover if available
-    if cover_type == "custom" and custom_cover and custom_cover.get('cover_image') and os.path.exists(custom_cover['cover_image']):
+    # ALWAYS use HTML cover if it exists
+    if custom_cover and custom_cover.get('cover_html') and os.path.exists(custom_cover['cover_html']):
         try:
-            # Read the cover image and embed it
-            with open(custom_cover['cover_image'], 'rb') as f:
-                img_data = f.read()
-            img_b64 = base64.b64encode(img_data).decode()
+            # Read the saved HTML cover file
+            with open(custom_cover['cover_html'], 'r') as f:
+                full_cover_html = f.read()
             
-            # Use the complete cover image
-            cover_html = f"""
-            <div class="cover-page">
-                <img src="data:image/jpeg;base64,{img_b64}" style="width:100%; max-width:800px; margin:0 auto; display:block; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
-            </div>
-            <hr style="margin: 40px 0;">
-            """
+            # Extract JUST the cover part (between body tags)
+            import re
+            body_match = re.search(r'<body>(.*?)</body>', full_cover_html, re.DOTALL)
+            if body_match:
+                cover_html = body_match.group(1)
+            else:
+                # Fallback to simple header
+                cover_html = f"""
+                <div class="book-header">
+                    <h1>{book_title}</h1>
+                    <div class="author">by {author_name}</div>
+                </div>
+                """
         except Exception as e:
-            # Fallback to simple header
             cover_html = f"""
             <div class="book-header">
                 <h1>{book_title}</h1>
                 <div class="author">by {author_name}</div>
-                <div class="date">Generated on {datetime.now().strftime("%B %d, %Y")}</div>
             </div>
             """
     else:
@@ -211,7 +214,6 @@ def generate_html(book_title, author_name, stories, format_style, include_toc=Tr
         <div class="book-header">
             <h1>{book_title}</h1>
             <div class="author">by {author_name}</div>
-            <div class="date">Generated on {datetime.now().strftime("%B %d, %Y")}</div>
         </div>
         """
     
@@ -244,19 +246,16 @@ def generate_html(book_title, author_name, stories, format_style, include_toc=Tr
         answer_text = story.get('answer_text', '')
         images = story.get('images', [])
         
-        # Add anchor for TOC
         content_html += f"<div class='story' id='story-{i}'>"
         
         if format_style == 'interview':
             content_html += f"<h2 class='question'>Q: {question}</h2>"
         
-        # Convert newlines to paragraphs
         paragraphs = answer_text.split('\n')
         for p in paragraphs:
             if p.strip():
                 content_html += f"<p>{p}</p>"
         
-        # Add images
         if images:
             content_html += "<div class='image-gallery'>"
             for img_data in images:
@@ -297,61 +296,11 @@ def generate_html(book_title, author_name, stories, format_style, include_toc=Tr
             margin: -40px -20px 40px -20px;
             border-radius: 0 0 20px 20px;
         }}
-        .cover-page {{
-            margin: -40px -20px 40px -20px;
-            text-align: center;
-        }}
-        h1 {{
-            font-size: 48px;
-            margin: 0;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }}
-        .author {{
-            font-size: 24px;
-            margin-top: 10px;
-            opacity: 0.9;
-        }}
-        .date {{
-            font-size: 14px;
-            margin-top: 20px;
-            opacity: 0.8;
-        }}
-        .toc {{
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin: 30px 0;
-        }}
-        .toc ul {{
-            list-style: none;
-            padding: 0;
-        }}
-        .toc-session {{
-            font-weight: bold;
-            font-size: 18px;
-            margin-top: 15px;
-            color: #667eea;
-        }}
-        .toc-story {{
-            margin-left: 20px;
-        }}
-        .toc-story a {{
-            color: #333;
-            text-decoration: none;
-        }}
-        .toc-story a:hover {{
-            color: #667eea;
-            text-decoration: underline;
-        }}
         .session-title {{
             color: #764ba2;
             border-bottom: 2px solid #667eea;
             padding-bottom: 10px;
             margin-top: 40px;
-        }}
-        .story {{
-            margin: 30px 0;
         }}
         .question {{
             color: #667eea;
@@ -393,15 +342,12 @@ def generate_html(book_title, author_name, stories, format_style, include_toc=Tr
             font-size: 12px;
             margin-top: 60px;
         }}
-        @media print {{
-            body {{
-                background: white;
-                padding: 0;
-            }}
-            .book-header {{
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }}
+        /* Cover styling from saved HTML */
+        .cover-container {{
+            width: 600px;
+            height: 900px;
+            margin: 0 auto 40px auto;
+            position: relative;
         }}
     </style>
 </head>
