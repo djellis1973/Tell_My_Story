@@ -8,18 +8,15 @@ import html
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-
-# New imports for additional formats
-import weasyprint
+from PIL import Image
 from fpdf import FPDF
+
+# Additional imports for new formats
 import ebooklib
 from ebooklib import epub
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 import tempfile
-from PIL import Image
-import subprocess
-import sys
 
 def clean_text(text):
     """Convert HTML entities to regular characters"""
@@ -671,21 +668,141 @@ def generate_epub(title, author, stories, format_style="interview", include_toc=
     
     return epub_bytes.getvalue()
 
+class PDF(FPDF):
+    def header(self):
+        if self.page_no() > 1:  # Skip header on cover page
+            self.set_font('Times', 'I', 8)
+            self.cell(0, 10, '', 0, 0, 'R')
+            self.ln(20)
+    
+    def footer(self):
+        if self.page_no() > 1:  # Skip footer on cover page
+            self.set_y(-15)
+            self.set_font('Times', 'I', 8)
+            self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+
 def generate_pdf(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
-    """Generate a PDF/X compatible PDF file using WeasyPrint"""
+    """Generate a PDF/X compatible PDF file using FPDF2"""
     
-    # First generate HTML content
-    html_content = generate_html(title, author, stories, format_style, include_toc, include_images, cover_image, cover_choice)
+    pdf = PDF()
+    pdf.add_page()
     
-    # Convert HTML to PDF with PDF/X settings
-    html_obj = weasyprint.HTML(string=html_content, base_url="")
+    # Set margins
+    pdf.set_left_margin(25.4)  # 1 inch in mm
+    pdf.set_right_margin(25.4)
+    pdf.set_top_margin(25.4)
+    pdf.set_auto_page_break(True, margin=25.4)
     
-    # Set PDF/X-1a:2003 compliance
-    pdf_bytes = html_obj.write_pdf(
-        zoom=1,
-        presentational_hints=True
-    )
+    # Set default font
+    pdf.set_font('Times', '', 12)
     
+    # COVER PAGE
+    if cover_choice == "uploaded" and cover_image:
+        try:
+            # Save cover image temporarily
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                tmp_file.write(cover_image)
+                tmp_path = tmp_file.name
+            
+            # Add image centered
+            pdf.image(tmp_path, x=50, y=50, w=110)
+            os.unlink(tmp_path)
+            
+            # Add title and author
+            pdf.ln(150)
+            pdf.set_font('Times', 'B', 42)
+            pdf.cell(0, 20, title, 0, 1, 'C')
+            pdf.set_font('Times', 'I', 24)
+            pdf.cell(0, 20, f'by {author}', 0, 1, 'C')
+        except:
+            pdf.set_font('Times', 'B', 42)
+            pdf.cell(0, 100, title, 0, 1, 'C')
+            pdf.set_font('Times', 'I', 24)
+            pdf.cell(0, 20, f'by {author}', 0, 1, 'C')
+    else:
+        pdf.set_font('Times', 'B', 42)
+        pdf.cell(0, 100, title, 0, 1, 'C')
+        pdf.set_font('Times', 'I', 24)
+        pdf.cell(0, 20, f'by {author}', 0, 1, 'C')
+    
+    # Copyright page
+    pdf.add_page()
+    pdf.set_font('Times', '', 12)
+    pdf.ln(100)
+    pdf.cell(0, 10, f'© {datetime.now().year} {author}. All rights reserved.', 0, 1, 'C')
+    
+    # Table of Contents
+    if include_toc:
+        pdf.add_page()
+        pdf.set_font('Times', 'B', 18)
+        pdf.cell(0, 20, 'Table of Contents', 0, 1, 'C')
+        pdf.ln(10)
+        
+        sessions = {}
+        for story in stories:
+            session_title = story.get('session_title', 'Untitled Session')
+            if session_title not in sessions:
+                sessions[session_title] = []
+            sessions[session_title].append(story)
+        
+        pdf.set_font('Times', '', 12)
+        for session_title in sessions.keys():
+            pdf.cell(0, 10, f'  {session_title}', 0, 1)
+    
+    # Stories
+    current_session = None
+    for story in stories:
+        session_title = story.get('session_title', 'Untitled Session')
+        
+        if session_title != current_session:
+            current_session = session_title
+            pdf.add_page()
+            pdf.set_font('Times', 'B', 16)
+            pdf.cell(0, 20, session_title, 0, 1, 'C')
+            pdf.ln(10)
+        
+        if format_style == "interview":
+            question_text = story.get('question', '')
+            clean_question = clean_text(question_text)
+            pdf.set_font('Times', 'BI', 12)
+            pdf.multi_cell(0, 6, clean_question)
+            pdf.ln(5)
+        
+        answer_text = story.get('answer_text', '')
+        if answer_text:
+            clean_answer = clean_text(answer_text)
+            pdf.set_font('Times', '', 12)
+            paragraphs = clean_answer.split('\n')
+            for para in paragraphs:
+                if para.strip():
+                    pdf.multi_cell(0, 6, para.strip())
+                    pdf.ln(3)
+        
+        # Add images
+        if include_images and story.get('images'):
+            for img in story.get('images', []):
+                if img.get('base64'):
+                    try:
+                        img_data = base64.b64decode(img['base64'])
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                            tmp_file.write(img_data)
+                            tmp_path = tmp_file.name
+                        
+                        pdf.image(tmp_path, x=50, w=100)
+                        os.unlink(tmp_path)
+                        
+                        if img.get('caption'):
+                            clean_caption = clean_text(img['caption'])
+                            pdf.set_font('Times', 'I', 10)
+                            pdf.ln(5)
+                            pdf.cell(0, 5, clean_caption, 0, 1, 'C')
+                    except:
+                        pass
+        
+        pdf.ln(10)
+    
+    # Output as bytes
+    pdf_bytes = pdf.output(dest='S').encode('latin-1')
     return pdf_bytes
 
 def generate_rtf(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
@@ -704,6 +821,7 @@ def generate_rtf(title, author, stories, format_style="interview", include_toc=T
         rtf_parts.append("\\par\\pard\\qc ")
         rtf_parts.append(f"\\b\\fs48 {title}\\b0\\par\\par")
         rtf_parts.append(f"\\i\\fs36 by {author}\\i0\\par\\par")
+        rtf_parts.append("\\par [Cover Image] \\par\\par")
     else:
         rtf_parts.append("\\par\\pard\\qc ")
         rtf_parts.append(f"\\b\\fs48 {title}\\b0\\par\\par")
@@ -741,7 +859,8 @@ def generate_rtf(title, author, stories, format_style="interview", include_toc=T
         if format_style == "interview":
             question_text = story.get('question', '')
             clean_question = clean_text(question_text)
-            rtf_parts.append(f"\\pard\\li720 \\b\\i {clean_question}\\b0\\i0\\par\\par")
+            escaped_question = clean_question.replace('\\', '\\\\').replace('{', '\\{').replace('}', '\\}')
+            rtf_parts.append(f"\\pard\\li720 \\b\\i {escaped_question}\\b0\\i0\\par\\par")
         
         answer_text = story.get('answer_text', '')
         if answer_text:
@@ -753,12 +872,13 @@ def generate_rtf(title, author, stories, format_style="interview", include_toc=T
                     rtf_parts.append(f"\\pard\\fi720 {escaped_para}\\par")
             rtf_parts.append("\\par")
         
-        # Add image placeholders (RTF doesn't support images well, so we'll note them)
+        # Add image placeholders
         if include_images and story.get('images'):
             for img in story.get('images', []):
                 rtf_parts.append("\\pard\\qc [Image: ")
                 if img.get('caption'):
-                    rtf_parts.append(clean_text(img['caption']))
+                    escaped_caption = clean_text(img['caption']).replace('\\', '\\\\').replace('{', '\\{').replace('}', '\\}')
+                    rtf_parts.append(escaped_caption)
                 rtf_parts.append("]\\par\\par")
         
         rtf_parts.append("\\par")
