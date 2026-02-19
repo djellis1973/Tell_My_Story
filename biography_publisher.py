@@ -16,6 +16,13 @@ def show_celebration():
 
 def generate_docx(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
     """Generate a Word document from stories"""
+    
+    # DEBUG: Print what we received
+    print(f"DEBUG - Cover choice: {cover_choice}")
+    print(f"DEBUG - Cover image present: {cover_image is not None}")
+    if cover_image:
+        print(f"DEBUG - Cover image size: {len(cover_image)} bytes")
+    
     doc = Document()
     
     # Set document styling
@@ -25,6 +32,9 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
     
     # COVER PAGE - Based on user choice
     if cover_choice == "uploaded" and cover_image:
+        # DEBUG: Let us know we're in the uploaded cover branch
+        print("DEBUG: Using uploaded cover image")
+        
         # Add uploaded image as cover
         try:
             image_stream = io.BytesIO(cover_image)
@@ -50,10 +60,13 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             author_run.font.size = Pt(16)
             author_run.font.italic = True
             
-            # Add a page break after the cover to separate it from copyright page
+            # Add a page break after the cover
             doc.add_page_break()
+            
+            print("DEBUG: Successfully added uploaded cover image")
         except Exception as e:
-            # Fallback to simple title cover if image fails
+            print(f"DEBUG: Error adding uploaded image: {str(e)}")
+            # Fallback to simple title cover
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             title_run = title_para.add_run(title)
@@ -65,10 +78,9 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             author_run = author_para.add_run(f"by {author}")
             author_run.font.size = Pt(16)
             author_run.font.italic = True
-            
-            # Add page break after title cover
             doc.add_page_break()
     else:
+        print("DEBUG: Using simple title cover")
         # Simple title cover
         title_para = doc.add_paragraph()
         title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -85,7 +97,7 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         # Add page break after title cover
         doc.add_page_break()
     
-    # Copyright page (this will now start on a new page)
+    # Add publication info
     copyright_para = doc.add_paragraph()
     copyright_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     copyright_para.add_run(f"© {datetime.now().year} {author}. All rights reserved.")
