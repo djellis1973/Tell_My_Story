@@ -28,12 +28,16 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         # Add uploaded image as cover
         try:
             image_stream = io.BytesIO(cover_image)
+            
+            # Add the cover image centered on its own page
             doc.add_picture(image_stream, width=Inches(5))
             last_paragraph = doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             
-            # Add title and author below image
+            # Add some space after the image
             doc.add_paragraph()
+            
+            # Add title and author below image
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             title_run = title_para.add_run(title)
@@ -45,8 +49,11 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             author_run = author_para.add_run(f"by {author}")
             author_run.font.size = Pt(16)
             author_run.font.italic = True
+            
+            # Add a page break after the cover to separate it from copyright page
+            doc.add_page_break()
         except Exception as e:
-            # Fallback to simple title
+            # Fallback to simple title cover if image fails
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             title_run = title_para.add_run(title)
@@ -58,6 +65,9 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             author_run = author_para.add_run(f"by {author}")
             author_run.font.size = Pt(16)
             author_run.font.italic = True
+            
+            # Add page break after title cover
+            doc.add_page_break()
     else:
         # Simple title cover
         title_para = doc.add_paragraph()
@@ -71,9 +81,11 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         author_run = author_para.add_run(f"by {author}")
         author_run.font.size = Pt(16)
         author_run.font.italic = True
+        
+        # Add page break after title cover
+        doc.add_page_break()
     
-    # Add publication info
-    doc.add_page_break()
+    # Copyright page (this will now start on a new page)
     copyright_para = doc.add_paragraph()
     copyright_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     copyright_para.add_run(f"© {datetime.now().year} {author}. All rights reserved.")
