@@ -818,20 +818,63 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         
         doc = Document()
         
-        # Cover page
-        title_para = doc.add_paragraph()
-        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        title_run = title_para.add_run(title)
-        title_run.font.size = Pt(28)
-        title_run.font.bold = True
-        
-        author_para = doc.add_paragraph()
-        author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        author_run = author_para.add_run(f"by {author}")
-        author_run.font.size = Pt(16)
-        author_run.font.italic = True
-        
-        doc.add_page_break()
+        # COVER PAGE - Based on user choice
+        if cover_choice == "uploaded" and cover_image:
+            try:
+                # Add uploaded image as cover
+                image_stream = io.BytesIO(cover_image)
+                doc.add_picture(image_stream, width=Inches(5))
+                last_paragraph = doc.paragraphs[-1]
+                last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
+                # Add some space
+                doc.add_paragraph()
+                
+                # Add title and author below image
+                title_para = doc.add_paragraph()
+                title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                title_run = title_para.add_run(title)
+                title_run.font.size = Pt(28)
+                title_run.font.bold = True
+                
+                author_para = doc.add_paragraph()
+                author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                author_run = author_para.add_run(f"by {author}")
+                author_run.font.size = Pt(16)
+                author_run.font.italic = True
+                
+                doc.add_page_break()
+                
+            except Exception as e:
+                # Fallback to simple cover if image fails
+                title_para = doc.add_paragraph()
+                title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                title_run = title_para.add_run(title)
+                title_run.font.size = Pt(28)
+                title_run.font.bold = True
+                
+                author_para = doc.add_paragraph()
+                author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                author_run = author_para.add_run(f"by {author}")
+                author_run.font.size = Pt(16)
+                author_run.font.italic = True
+                
+                doc.add_page_break()
+        else:
+            # Simple title cover
+            title_para = doc.add_paragraph()
+            title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            title_run = title_para.add_run(title)
+            title_run.font.size = Pt(28)
+            title_run.font.bold = True
+            
+            author_para = doc.add_paragraph()
+            author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            author_run = author_para.add_run(f"by {author}")
+            author_run.font.size = Pt(16)
+            author_run.font.italic = True
+            
+            doc.add_page_break()
         
         # Table of Contents
         if include_toc:
@@ -892,13 +935,13 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         docx_bytes.seek(0)
         
         return docx_bytes.getvalue()
+        
     except ImportError:
         st.error("Please install python-docx: pip install python-docx")
         return None
     except Exception as e:
         st.error(f"Error generating DOCX: {str(e)}")
         return None
-
 def generate_html(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
     """Generate HTML document from stories"""
     
