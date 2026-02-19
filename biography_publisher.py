@@ -10,12 +10,8 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from PIL import Image
 from fpdf import FPDF
-
-# Additional imports for new formats
 import ebooklib
 from ebooklib import epub
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
 import tempfile
 
 def clean_text(text):
@@ -893,12 +889,12 @@ def generate_rtf(title, author, stories, format_style="interview", include_toc=T
 
 def main():
     st.set_page_config(
-        page_title="Story to Book Converter",
+        page_title="Biography Publisher",
         page_icon="📚",
         layout="wide"
     )
     
-    st.title("📚 Story to Book Converter")
+    st.title("📚 Biography Publisher")
     st.markdown("Convert your stories into professional book formats")
     
     # Sidebar for configuration
@@ -1080,24 +1076,27 @@ def main():
                 # Display download buttons
                 st.subheader("Download Your Book")
                 
-                cols = st.columns(len(generated_files))
-                for idx, (fmt, data) in enumerate(generated_files.items()):
-                    with cols[idx]:
-                        file_name = f"{title.replace(' ', '_')}.{fmt}"
-                        mime_types = {
-                            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            'html': 'text/html',
-                            'epub': 'application/epub+zip',
-                            'pdf': 'application/pdf',
-                            'rtf': 'application/rtf'
-                        }
-                        st.download_button(
-                            label=f"Download {fmt.upper()}",
-                            data=data,
-                            file_name=file_name,
-                            mime=mime_types.get(fmt, 'application/octet-stream'),
-                            use_container_width=True
-                        )
+                if generated_files:
+                    cols = st.columns(len(generated_files))
+                    for idx, (fmt, data) in enumerate(generated_files.items()):
+                        with cols[idx]:
+                            file_name = f"{title.replace(' ', '_')}.{fmt}"
+                            mime_types = {
+                                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                'html': 'text/html',
+                                'epub': 'application/epub+zip',
+                                'pdf': 'application/pdf',
+                                'rtf': 'application/rtf'
+                            }
+                            st.download_button(
+                                label=f"Download {fmt.upper()}",
+                                data=data,
+                                file_name=file_name,
+                                mime=mime_types.get(fmt, 'application/octet-stream'),
+                                use_container_width=True
+                            )
+                else:
+                    st.warning("No formats selected. Please check at least one format in the sidebar.")
 
 if __name__ == "__main__":
     main()
