@@ -818,50 +818,37 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         
         doc = Document()
         
-        # COVER PAGE - Based on user choice
+        # Set page margins to minimum for bleeding effect
+        sections = doc.sections
+        for section in sections:
+            section.top_margin = Inches(0.2)
+            section.bottom_margin = Inches(0.2)
+            section.left_margin = Inches(0.2)
+            section.right_margin = Inches(0.2)
+        
+        # COVER PAGE - Just the image, no text
         if cover_choice == "uploaded" and cover_image:
             try:
-                # Add uploaded image as cover
+                # Add uploaded image as full-page cover (no text)
                 image_stream = io.BytesIO(cover_image)
-                doc.add_picture(image_stream, width=Inches(5))
+                
+                # Make image as large as possible for bleeding effect
+                doc.add_picture(image_stream, width=Inches(7.5))  # Almost full page width
                 last_paragraph = doc.paragraphs[-1]
                 last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 
-                # Add some space
-                doc.add_paragraph()
-                
-                # Add title and author below image
-                title_para = doc.add_paragraph()
-                title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                title_run = title_para.add_run(title)
-                title_run.font.size = Pt(28)
-                title_run.font.bold = True
-                
-                author_para = doc.add_paragraph()
-                author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                author_run = author_para.add_run(f"by {author}")
-                author_run.font.size = Pt(16)
-                author_run.font.italic = True
-                
-                doc.add_page_break()
+                # NO title or author text added here
+                # Just the image, then page break to start book
                 
             except Exception as e:
-                # Fallback to simple cover if image fails
+                # If image fails, add minimal text cover (but this should rarely happen)
                 title_para = doc.add_paragraph()
                 title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 title_run = title_para.add_run(title)
                 title_run.font.size = Pt(28)
                 title_run.font.bold = True
-                
-                author_para = doc.add_paragraph()
-                author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                author_run = author_para.add_run(f"by {author}")
-                author_run.font.size = Pt(16)
-                author_run.font.italic = True
-                
-                doc.add_page_break()
         else:
-            # Simple title cover
+            # Simple text cover (only used if no image uploaded)
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             title_run = title_para.add_run(title)
@@ -873,10 +860,13 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             author_run = author_para.add_run(f"by {author}")
             author_run.font.size = Pt(16)
             author_run.font.italic = True
-            
-            doc.add_page_break()
         
-        # Table of Contents
+        # Page break after cover to start book content
+        doc.add_page_break()
+        
+        # NO copyright page - straight to content
+        
+        # Table of Contents (optional)
         if include_toc:
             doc.add_heading("Table of Contents", level=1)
             sessions = {}
@@ -890,7 +880,7 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                 doc.add_paragraph(f"  {session_title}", style='List Bullet')
             doc.add_page_break()
         
-        # Add stories
+        # Add stories directly
         current_session = None
         for story in stories:
             session_title = story.get('session_title', 'Untitled Session')
@@ -942,6 +932,7 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
     except Exception as e:
         st.error(f"Error generating DOCX: {str(e)}")
         return None
+
 def generate_html(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
     """Generate HTML document from stories"""
     
