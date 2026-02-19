@@ -818,37 +818,36 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         
         doc = Document()
         
-        # Set page margins to minimum for bleeding effect
-        sections = doc.sections
-        for section in sections:
-            section.top_margin = Inches(0.2)
-            section.bottom_margin = Inches(0.2)
-            section.left_margin = Inches(0.2)
-            section.right_margin = Inches(0.2)
-        
-        # COVER PAGE - Just the image, no text
+        # COVER PAGE - Based on user choice
         if cover_choice == "uploaded" and cover_image:
             try:
-                # Add uploaded image as full-page cover (no text)
+                # Add uploaded image as cover (NO text)
                 image_stream = io.BytesIO(cover_image)
-                
-                # Make image as large as possible for bleeding effect
-                doc.add_picture(image_stream, width=Inches(7.5))  # Almost full page width
+                doc.add_picture(image_stream, width=Inches(5))
                 last_paragraph = doc.paragraphs[-1]
                 last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 
-                # NO title or author text added here
-                # Just the image, then page break to start book
+                # NO title or author text here - just the image
+                
+                # Page break after cover
+                doc.add_page_break()
                 
             except Exception as e:
-                # If image fails, add minimal text cover (but this should rarely happen)
+                # Fallback to simple title cover if image fails
                 title_para = doc.add_paragraph()
                 title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 title_run = title_para.add_run(title)
                 title_run.font.size = Pt(28)
                 title_run.font.bold = True
+                
+                author_para = doc.add_paragraph()
+                author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                author_run = author_para.add_run(f"by {author}")
+                author_run.font.size = Pt(16)
+                author_run.font.italic = True
+                doc.add_page_break()
         else:
-            # Simple text cover (only used if no image uploaded)
+            # Simple title cover
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             title_run = title_para.add_run(title)
@@ -860,15 +859,22 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             author_run = author_para.add_run(f"by {author}")
             author_run.font.size = Pt(16)
             author_run.font.italic = True
+            doc.add_page_break()
         
-        # Page break after cover to start book content
-        doc.add_page_break()
+        # Copyright page (blank for now - can add content later)
+        copyright_para = doc.add_paragraph()
+        copyright_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        copyright_para.add_run("")  # Empty for now
         
-        # NO copyright page - straight to content
-        
-        # Table of Contents (optional)
+        # Table of Contents
         if include_toc:
-            doc.add_heading("Table of Contents", level=1)
+            doc.add_page_break()
+            toc_para = doc.add_paragraph()
+            toc_run = toc_para.add_run("Table of Contents")
+            toc_run.font.size = Pt(18)
+            toc_run.font.bold = True
+            
+            # Group by session for TOC
             sessions = {}
             for story in stories:
                 session_title = story.get('session_title', 'Untitled Session')
@@ -878,18 +884,24 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             
             for session_title in sessions.keys():
                 doc.add_paragraph(f"  {session_title}", style='List Bullet')
-            doc.add_page_break()
         
-        # Add stories directly
+        # Add stories
+        doc.add_page_break()
+        
         current_session = None
         for story in stories:
             session_title = story.get('session_title', 'Untitled Session')
             
+            # Add session header if new session
             if session_title != current_session:
                 current_session = session_title
-                doc.add_heading(session_title, level=1)
+                session_para = doc.add_paragraph()
+                session_run = session_para.add_run(session_title)
+                session_run.font.size = Pt(16)
+                session_run.font.bold = True
             
             if format_style == "interview":
+                # Add question
                 q_para = doc.add_paragraph()
                 q_run = q_para.add_run(story.get('question', ''))
                 q_run.font.bold = True
@@ -898,12 +910,13 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             # Add answer
             answer_text = story.get('answer_text', '')
             if answer_text:
+                # Split into paragraphs
                 paragraphs = answer_text.split('\n')
                 for para in paragraphs:
                     if para.strip():
                         doc.add_paragraph(para.strip())
             
-            # Add images
+            # Add images if any
             if include_images and story.get('images'):
                 for img in story.get('images', []):
                     if img.get('base64'):
@@ -911,12 +924,20 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                             img_data = base64.b64decode(img['base64'])
                             img_stream = io.BytesIO(img_data)
                             doc.add_picture(img_stream, width=Inches(4))
+                            last_paragraph = doc.paragraphs[-1]
+                            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            
+                            # Add caption
                             if img.get('caption'):
-                                caption = doc.add_paragraph(img['caption'])
-                                caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                caption_para = doc.add_paragraph()
+                                caption_run = caption_para.add_run(img['caption'])
+                                caption_run.font.size = Pt(10)
+                                caption_run.font.italic = True
+                                caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         except:
                             pass
             
+            # Add spacing between stories
             doc.add_paragraph()
         
         # Save to bytes
