@@ -8,6 +8,7 @@ import html  # Add this import
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
 
 def clean_text(text):
     """Convert HTML entities to regular characters"""
@@ -39,14 +40,14 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
     
     doc = Document()
     
-    # Set document margins (1 inch margins = 14400 twips)
+    # Set document margins
     sections = doc.sections
     for section in sections:
         section.top_margin = Inches(1)
         section.bottom_margin = Inches(1)
-        section.left_margin = Inches(1.25)  # Slightly larger left margin
-        section.right_margin = Inches(1.25)  # Slightly larger right margin
-        section.gutter = Inches(0)  # No gutter
+        section.left_margin = Inches(1.25)
+        section.right_margin = Inches(1.25)
+        section.gutter = Inches(0)
     
     # Set document styling
     style = doc.styles['Normal']
@@ -133,7 +134,7 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
     for story in stories:
         session_title = story.get('session_title', 'Untitled Session')
         
-        # Add session header if new session - CENTERED BLOCK
+        # Add session header if new session - CENTERED
         if session_title != current_session:
             current_session = session_title
             session_para = doc.add_paragraph()
@@ -144,26 +145,26 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             session_para.paragraph_format.space_before = Pt(12)
             session_para.paragraph_format.space_after = Pt(6)
         
-        # Create a table for the content block to achieve centered block with left-aligned text
+        # Create a centered container for the content
+        answer_text = story.get('answer_text', '')
         if format_style == "interview" or answer_text:
             # Create a 1-cell table that acts as a centered container
             table = doc.add_table(rows=1, cols=1)
             table.autofit = False
             table.allow_autofit = False
-            table.columns[0].width = Inches(5.5)  # Set a fixed width for the text block
+            table.columns[0].width = Inches(5.5)
             
             # Center the table on the page
-            table.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            table.alignment = WD_TABLE_ALIGNMENT.CENTER
             
-            # Get the cell and set its properties
+            # Get the cell
             cell = table.cell(0, 0)
-            cell.vertical_alignment = WD_ALIGN_PARAGRAPH.TOP
             
             # Add question inside the cell if interview format
             if format_style == "interview":
                 question_text = story.get('question', '')
                 clean_question = clean_text(question_text)
-                q_para = cell.paragraphs[0]  # Use the existing paragraph
+                q_para = cell.paragraphs[0]
                 q_run = q_para.add_run(clean_question)
                 q_run.font.bold = True
                 q_run.font.italic = True
@@ -172,7 +173,6 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                 q_para.paragraph_format.space_after = Pt(3)
             
             # Add answer inside the cell
-            answer_text = story.get('answer_text', '')
             if answer_text:
                 clean_answer = clean_text(answer_text)
                 paragraphs = clean_answer.split('\n')
@@ -180,7 +180,6 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                 for para in paragraphs:
                     if para.strip():
                         if format_style == "interview" and len(cell.paragraphs) == 1:
-                            # Add new paragraph for answer
                             p = cell.add_paragraph(para.strip())
                         else:
                             p = cell.add_paragraph(para.strip())
@@ -188,7 +187,7 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                         p.paragraph_format.first_line_indent = Inches(0.25)
                         p.paragraph_format.space_after = Pt(6)
         
-        # Add images outside the table (they should be centered independently)
+        # Add images if any
         if include_images and story.get('images'):
             for img in story.get('images', []):
                 if img.get('base64'):
