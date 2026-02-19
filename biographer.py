@@ -7,8 +7,8 @@ import os
 import re
 import hashlib
 import smtplib
-from email.mime.multipart import MIMEMultipart  # Fixed this line
-from email.mime.multipart
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart  # This is the corrected line
 import secrets
 import string
 import time
@@ -17,7 +17,6 @@ import base64
 from PIL import Image
 import io
 import zipfile
-
 # ============================================================================
 # PAGE CONFIG - MUST BE FIRST
 # ============================================================================
