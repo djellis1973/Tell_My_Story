@@ -10,29 +10,24 @@ from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 def clean_text(text):
-    """Clean HTML entities from text for clean display in documents"""
+    """Convert HTML entities to regular characters"""
     if not text:
         return text
     
-    # First unescape HTML entities (&nbsp; -> space, &amp; -> &, etc.)
-    text = html.unescape(text)
+    # Convert &nbsp; to space (this is the main fix)
+    text = text.replace('&nbsp;', ' ')
     
-    # Replace <p> and <br> with newlines for better formatting
-    text = text.replace('</p>', '\n\n').replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n')
+    # Also handle other common HTML entities
+    text = text.replace('&amp;', '&')
+    text = text.replace('&lt;', '<')
+    text = text.replace('&gt;', '>')
+    text = text.replace('&quot;', '"')
+    text = text.replace('&#39;', "'")
     
-    # Remove any remaining HTML tags
+    # Remove HTML tags but keep paragraph structure
     text = re.sub(r'<[^>]+>', '', text)
     
-    # Clean up multiple newlines
-    text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
-    
-    # Clean up multiple spaces
-    text = re.sub(r'[ \t]+', ' ', text)
-    
-    # Remove leading/trailing whitespace
-    text = text.strip()
-    
-    return text
+    return text.strip()
 
 def show_celebration():
     """Show a celebration animation when book is generated"""
@@ -41,12 +36,6 @@ def show_celebration():
 
 def generate_docx(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
     """Generate a Word document from stories"""
-    
-    # DEBUG: Print what we received
-    print(f"DEBUG - Cover choice: {cover_choice}")
-    print(f"DEBUG - Cover image present: {cover_image is not None}")
-    if cover_image:
-        print(f"DEBUG - Cover image size: {len(cover_image)} bytes")
     
     doc = Document()
     
@@ -57,22 +46,13 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
     
     # COVER PAGE - Based on user choice
     if cover_choice == "uploaded" and cover_image:
-        # DEBUG: Let us know we're in the uploaded cover branch
-        print("DEBUG: Using uploaded cover image")
-        
-        # Add uploaded image as cover
         try:
             image_stream = io.BytesIO(cover_image)
-            
-            # Add the cover image centered on its own page
             doc.add_picture(image_stream, width=Inches(5))
             last_paragraph = doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            
-            # Add some space after the image
             doc.add_paragraph()
             
-            # Add title and author below image
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             title_run = title_para.add_run(title)
@@ -85,12 +65,8 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             author_run.font.size = Pt(16)
             author_run.font.italic = True
             
-            # Add a page break after the cover
             doc.add_page_break()
-            
-            print("DEBUG: Successfully added uploaded cover image")
-        except Exception as e:
-            print(f"DEBUG: Error adding uploaded image: {str(e)}")
+        except:
             # Fallback to simple title cover
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -105,7 +81,6 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             author_run.font.italic = True
             doc.add_page_break()
     else:
-        print("DEBUG: Using simple title cover")
         # Simple title cover
         title_para = doc.add_paragraph()
         title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -118,8 +93,6 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         author_run = author_para.add_run(f"by {author}")
         author_run.font.size = Pt(16)
         author_run.font.italic = True
-        
-        # Add page break after title cover
         doc.add_page_break()
     
     # Add publication info
@@ -162,9 +135,11 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             session_run.font.bold = True
         
         if format_style == "interview":
-            # Add question
+            # Add question - clean it too
+            question_text = story.get('question', '')
+            clean_question = clean_text(question_text)
             q_para = doc.add_paragraph()
-            q_run = q_para.add_run(story.get('question', ''))
+            q_run = q_para.add_run(clean_question)
             q_run.font.bold = True
             q_run.font.italic = True
         
@@ -174,15 +149,11 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             # Clean the text before adding to document
             clean_answer = clean_text(answer_text)
             
-            # Split into paragraphs
-            paragraphs = clean_answer.split('\n\n')
+            # Split into paragraphs and add
+            paragraphs = clean_answer.split('\n')
             for para in paragraphs:
                 if para.strip():
-                    # Further split by single newlines if needed
-                    sub_paras = para.split('\n')
-                    for sub_para in sub_paras:
-                        if sub_para.strip():
-                            doc.add_paragraph(sub_para.strip())
+                    doc.add_paragraph(para.strip())
         
         # Add images if any
         if include_images and story.get('images'):
@@ -195,10 +166,11 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                         last_paragraph = doc.paragraphs[-1]
                         last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         
-                        # Add caption
+                        # Add caption - clean it too
                         if img.get('caption'):
                             caption_para = doc.add_paragraph()
-                            caption_run = caption_para.add_run(img['caption'])
+                            clean_caption = clean_text(img['caption'])
+                            caption_run = caption_para.add_run(clean_caption)
                             caption_run.font.size = Pt(10)
                             caption_run.font.italic = True
                             caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -360,7 +332,6 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
     html_parts.append('<div class="cover-page">')
     
     if cover_choice == "uploaded" and cover_image:
-        # Use uploaded image
         try:
             img_base64 = base64.b64encode(cover_image).decode()
             html_parts.append(f'''
@@ -371,7 +342,6 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
             </div>
             ''')
         except Exception:
-            # Fallback to simple cover
             html_parts.append(f'''
             <div class="simple-cover">
                 <h1>{title}</h1>
@@ -379,7 +349,6 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
             </div>
             ''')
     else:
-        # Simple gradient cover
         html_parts.append(f'''
         <div class="simple-cover">
             <h1>{title}</h1>
@@ -387,7 +356,7 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
         </div>
         ''')
     
-    html_parts.append('</div>')  # Close cover-page
+    html_parts.append('</div>')
     
     # Copyright page
     html_parts.append(f'<p class="copyright">© {datetime.now().year} {author}. All rights reserved.</p>')
@@ -398,7 +367,6 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
         html_parts.append('<h3>Table of Contents</h3>')
         html_parts.append('<ul>')
         
-        # Group by session
         sessions = {}
         for story in stories:
             session_title = story.get('session_title', 'Untitled Session')
@@ -419,32 +387,28 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
         session_title = story.get('session_title', 'Untitled Session')
         anchor = session_title.lower().replace(' ', '-').replace('?', '').replace('!', '').replace(',', '')
         
-        # Add session header if new session
         if session_title != current_session:
             current_session = session_title
             html_parts.append(f'<h2 id="{anchor}">{session_title}</h2>')
         
         if format_style == "interview":
-            html_parts.append(f'<div class="question">{story.get("question", "")}</div>')
+            # Clean question text
+            question_text = story.get('question', '')
+            clean_question = clean_text(question_text)
+            html_parts.append(f'<div class="question">{clean_question}</div>')
         
-        # Format answer with paragraphs - CLEAN IT HERE
+        # Format answer - CLEAN IT HERE
         answer_text = story.get('answer_text', '')
         if answer_text:
-            # Clean the text before adding to HTML
             clean_answer = clean_text(answer_text)
             
             html_parts.append('<div>')
-            paragraphs = clean_answer.split('\n\n')
+            paragraphs = clean_answer.split('\n')
             for para in paragraphs:
                 if para.strip():
-                    # Escape any remaining HTML special characters
+                    # Escape HTML special characters
                     escaped_para = para.strip().replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                    
-                    # Handle single newlines within paragraphs
-                    sub_paras = escaped_para.split('\n')
-                    for i, sub_para in enumerate(sub_paras):
-                        if sub_para.strip():
-                            html_parts.append(f'<p>{sub_para.strip()}</p>')
+                    html_parts.append(f'<p>{escaped_para}</p>')
             html_parts.append('</div>')
         
         # Add images
@@ -453,19 +417,16 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
                 if img.get('base64'):
                     html_parts.append(f'<img src="data:image/jpeg;base64,{img["base64"]}" class="story-image">')
                     if img.get('caption'):
-                        caption = img['caption'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                        # Clean caption text
+                        clean_caption = clean_text(img['caption'])
+                        caption = clean_caption.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                         html_parts.append(f'<p class="image-caption">{caption}</p>')
         
-        # Add separator
         html_parts.append('<hr style="margin: 30px 0; border: none; border-top: 1px dashed #ccc;">')
     
-    # Close HTML
     html_parts.append("""
     </body>
     </html>
     """)
     
-    # Join all parts
-    html_content = '\n'.join(html_parts)
-    
-    return html_content
+    return '\n'.join(html_parts)
