@@ -154,7 +154,7 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             table.allow_autofit = False
             
             # Set a fixed width for the text block - this creates equal margins
-            table.columns[0].width = Inches(5.5)  # This leaves ~1.25" margins on each side
+            table.columns[0].width = Inches(6.0)  # This creates exactly 1.25" margins on each side
             
             # Center the table on the page
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
