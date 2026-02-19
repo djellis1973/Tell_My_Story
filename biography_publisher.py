@@ -39,66 +39,72 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
     
     doc = Document()
     
+    # Set document margins (1 inch margins = 14400 twips)
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+    
     # Set document styling
     style = doc.styles['Normal']
     style.font.name = 'Times New Roman'
     style.font.size = Pt(12)
+    style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Text inside is left-aligned
+    style.paragraph_format.first_line_indent = Inches(0.25)  # Add paragraph indents
     
     # COVER PAGE - Based on user choice
     if cover_choice == "uploaded" and cover_image:
         try:
             image_stream = io.BytesIO(cover_image)
+            
+            # Add the cover image centered
             doc.add_picture(image_stream, width=Inches(5))
             last_paragraph = doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            doc.add_paragraph()
             
-            title_para = doc.add_paragraph()
-            title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            title_run = title_para.add_run(title)
-            title_run.font.size = Pt(28)
-            title_run.font.bold = True
-            
-            author_para = doc.add_paragraph()
-            author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            author_run = author_para.add_run(f"by {author}")
-            author_run.font.size = Pt(16)
-            author_run.font.italic = True
-            
+            # Add a page break after the cover image only
             doc.add_page_break()
-        except:
-            # Fallback to simple title cover
-            title_para = doc.add_paragraph()
-            title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            title_run = title_para.add_run(title)
-            title_run.font.size = Pt(28)
-            title_run.font.bold = True
+            
+        except Exception as e:
+            # Fallback to simple text cover
+            cover_para = doc.add_paragraph()
+            cover_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            cover_run = cover_para.add_run(title)
+            cover_run.font.size = Pt(42)
+            cover_run.font.bold = True
             
             author_para = doc.add_paragraph()
             author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             author_run = author_para.add_run(f"by {author}")
-            author_run.font.size = Pt(16)
+            author_run.font.size = Pt(24)
             author_run.font.italic = True
+            
             doc.add_page_break()
     else:
-        # Simple title cover
-        title_para = doc.add_paragraph()
-        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        title_run = title_para.add_run(title)
-        title_run.font.size = Pt(28)
-        title_run.font.bold = True
+        # Simple text cover only
+        cover_para = doc.add_paragraph()
+        cover_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cover_run = cover_para.add_run(title)
+        cover_run.font.size = Pt(42)
+        cover_run.font.bold = True
         
         author_para = doc.add_paragraph()
         author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         author_run = author_para.add_run(f"by {author}")
-        author_run.font.size = Pt(16)
+        author_run.font.size = Pt(24)
         author_run.font.italic = True
+        
         doc.add_page_break()
     
-    # Add publication info
+    # Add publication info (on its own page after cover)
     copyright_para = doc.add_paragraph()
     copyright_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     copyright_para.add_run(f"© {datetime.now().year} {author}. All rights reserved.")
+    
+    # Add a blank line after copyright
+    doc.add_paragraph()
     
     # Table of Contents
     if include_toc:
@@ -107,6 +113,8 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
         toc_run = toc_para.add_run("Table of Contents")
         toc_run.font.size = Pt(18)
         toc_run.font.bold = True
+        toc_para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # Center the TOC title
+        toc_para.paragraph_format.space_after = Pt(12)
         
         # Group by session for TOC
         sessions = {}
@@ -117,7 +125,9 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             sessions[session_title].append(story)
         
         for session_title in sessions.keys():
-            doc.add_paragraph(f"  {session_title}", style='List Bullet')
+            p = doc.add_paragraph(f"  {session_title}", style='List Bullet')
+            p.paragraph_format.left_indent = Inches(0.5)  # Indent the TOC entries
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Keep TOC text left-aligned
     
     # Add stories
     doc.add_page_break()
@@ -133,15 +143,21 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             session_run = session_para.add_run(session_title)
             session_run.font.size = Pt(16)
             session_run.font.bold = True
+            session_para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # Center the session title
+            session_para.paragraph_format.space_before = Pt(12)
+            session_para.paragraph_format.space_after = Pt(6)
         
         if format_style == "interview":
-            # Add question - clean it too
+            # Add question
             question_text = story.get('question', '')
             clean_question = clean_text(question_text)
             q_para = doc.add_paragraph()
             q_run = q_para.add_run(clean_question)
             q_run.font.bold = True
             q_run.font.italic = True
+            q_para.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Questions left-aligned
+            q_para.paragraph_format.space_before = Pt(6)
+            q_para.paragraph_format.space_after = Pt(3)
         
         # Add answer - CLEAN IT HERE
         answer_text = story.get('answer_text', '')
@@ -153,7 +169,10 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             paragraphs = clean_answer.split('\n')
             for para in paragraphs:
                 if para.strip():
-                    doc.add_paragraph(para.strip())
+                    p = doc.add_paragraph(para.strip())
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT  # Text inside left-aligned
+                    p.paragraph_format.first_line_indent = Inches(0.25)  # Indent first line
+                    p.paragraph_format.space_after = Pt(6)
         
         # Add images if any
         if include_images and story.get('images'):
@@ -162,18 +181,22 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                     try:
                         img_data = base64.b64decode(img['base64'])
                         img_stream = io.BytesIO(img_data)
+                        
+                        # Add image centered (the image block is centered)
                         doc.add_picture(img_stream, width=Inches(4))
                         last_paragraph = doc.paragraphs[-1]
                         last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         
-                        # Add caption - clean it too
+                        # Add caption
                         if img.get('caption'):
                             caption_para = doc.add_paragraph()
                             clean_caption = clean_text(img['caption'])
                             caption_run = caption_para.add_run(clean_caption)
                             caption_run.font.size = Pt(10)
                             caption_run.font.italic = True
-                            caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER  # Caption centered under image
+                            caption_para.paragraph_format.space_before = Pt(3)
+                            caption_para.paragraph_format.space_after = Pt(6)
                     except:
                         pass
         
