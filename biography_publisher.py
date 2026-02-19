@@ -19,10 +19,10 @@ def clean_text(text):
     if not text:
         return text
     
-    # Convert &nbsp; to space (this is the main fix)
+    # Convert &nbsp; to space
     text = text.replace('&nbsp;', ' ')
     
-    # Also handle other common HTML entities
+    # Handle other common HTML entities
     text = text.replace('&amp;', '&')
     text = text.replace('&lt;', '<')
     text = text.replace('&gt;', '>')
@@ -44,7 +44,7 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
     
     doc = Document()
     
-    # Set document margins (1 inch margins = 14400 twips)
+    # Set document margins
     sections = doc.sections
     for section in sections:
         section.top_margin = Inches(1)
@@ -66,6 +66,20 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             doc.add_picture(image_stream, width=Inches(5))
             last_paragraph = doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            
+            # Add title and author below image
+            cover_para = doc.add_paragraph()
+            cover_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            cover_run = cover_para.add_run(title)
+            cover_run.font.size = Pt(42)
+            cover_run.font.bold = True
+            
+            author_para = doc.add_paragraph()
+            author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            author_run = author_para.add_run(f"by {author}")
+            author_run.font.size = Pt(24)
+            author_run.font.italic = True
+            
             doc.add_page_break()
         except Exception as e:
             # Fallback to simple text cover
@@ -123,7 +137,8 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             sessions[session_title].append(story)
         
         for session_title in sessions.keys():
-            p = doc.add_paragraph(f"  {session_title}", style='List Bullet')
+            p = doc.add_paragraph()
+            p.add_run(f"  {session_title}")
             p.paragraph_format.left_indent = Inches(0.5)
             p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
     
@@ -149,13 +164,14 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
             # Add question
             question_text = story.get('question', '')
             clean_question = clean_text(question_text)
-            q_para = doc.add_paragraph()
-            q_run = q_para.add_run(clean_question)
-            q_run.font.bold = True
-            q_run.font.italic = True
-            q_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            q_para.paragraph_format.space_before = Pt(6)
-            q_para.paragraph_format.space_after = Pt(3)
+            if clean_question:
+                q_para = doc.add_paragraph()
+                q_run = q_para.add_run(clean_question)
+                q_run.font.bold = True
+                q_run.font.italic = True
+                q_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                q_para.paragraph_format.space_before = Pt(6)
+                q_para.paragraph_format.space_after = Pt(3)
         
         # Add answer
         answer_text = story.get('answer_text', '')
@@ -179,10 +195,12 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                         img_data = base64.b64decode(img['base64'])
                         img_stream = io.BytesIO(img_data)
                         
+                        # Add image centered
                         doc.add_picture(img_stream, width=Inches(4))
                         last_paragraph = doc.paragraphs[-1]
                         last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         
+                        # Add caption
                         if img.get('caption'):
                             caption_para = doc.add_paragraph()
                             clean_caption = clean_text(img['caption'])
@@ -192,9 +210,10 @@ def generate_docx(title, author, stories, format_style="interview", include_toc=
                             caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                             caption_para.paragraph_format.space_before = Pt(3)
                             caption_para.paragraph_format.space_after = Pt(6)
-                    except:
+                    except Exception as e:
                         pass
         
+        # Add spacing between stories
         doc.add_paragraph()
     
     # Save to bytes
@@ -209,139 +228,139 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
     
     html_parts = []
     
-    html_parts.append(f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>{title}</title>
-        <style>
+    # HTML header with styling
+    html_parts.append(f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{html.escape(title)}</title>
+    <style>
+        body {{
+            font-family: 'Georgia', serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #fff;
+        }}
+        h1 {{
+            font-size: 42px;
+            text-align: center;
+            margin-bottom: 10px;
+            color: #000;
+        }}
+        h2 {{
+            font-size: 28px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            color: #444;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }}
+        .author {{
+            text-align: center;
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 40px;
+            font-style: italic;
+        }}
+        .question {{
+            font-weight: bold;
+            font-size: 18px;
+            margin-top: 30px;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }}
+        .story-image {{
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 20px auto;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        .image-caption {{
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            margin-top: -10px;
+            margin-bottom: 20px;
+            font-style: italic;
+        }}
+        .cover-page {{
+            text-align: center;
+            margin-bottom: 50px;
+            page-break-after: always;
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }}
+        .cover-image {{
+            max-width: 100%;
+            max-height: 70vh;
+            object-fit: contain;
+            margin: 20px auto;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }}
+        .simple-cover {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 60px 20px;
+            border-radius: 10px;
+            color: white;
+            margin: 20px;
+        }}
+        .simple-cover h1 {{
+            color: white;
+        }}
+        .simple-cover .author {{
+            color: rgba(255,255,255,0.9);
+        }}
+        .copyright {{
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }}
+        .toc {{
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 30px 0;
+        }}
+        .toc ul {{
+            list-style-type: none;
+            padding-left: 0;
+        }}
+        .toc li {{
+            margin-bottom: 10px;
+        }}
+        .toc a {{
+            color: #3498db;
+            text-decoration: none;
+        }}
+        .toc a:hover {{
+            text-decoration: underline;
+        }}
+        @media print {{
             body {{
-                font-family: 'Georgia', serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 800px;
-                margin: 0 auto;
-                padding: 40px 20px;
-                background: #fff;
-            }}
-            h1 {{
-                font-size: 42px;
-                text-align: center;
-                margin-bottom: 10px;
-                color: #000;
-            }}
-            h2 {{
-                font-size: 28px;
-                margin-top: 40px;
-                margin-bottom: 20px;
-                color: #444;
-                border-bottom: 2px solid #eee;
-                padding-bottom: 10px;
-            }}
-            .author {{
-                text-align: center;
-                font-size: 18px;
-                color: #666;
-                margin-bottom: 40px;
-                font-style: italic;
-            }}
-            .question {{
-                font-weight: bold;
-                font-size: 18px;
-                margin-top: 30px;
-                margin-bottom: 10px;
-                color: #2c3e50;
-                border-left: 4px solid #3498db;
-                padding-left: 15px;
-            }}
-            .story-image {{
-                max-width: 100%;
-                height: auto;
-                display: block;
-                margin: 20px auto;
-                border-radius: 5px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            }}
-            .image-caption {{
-                text-align: center;
-                font-size: 14px;
-                color: #666;
-                margin-top: -10px;
-                margin-bottom: 20px;
-                font-style: italic;
+                padding: 0.5in;
             }}
             .cover-page {{
-                text-align: center;
-                margin-bottom: 50px;
                 page-break-after: always;
-                min-height: 80vh;
-                display: flex;
-                flex-direction: column;
-                justify-content: center;
+                min-height: auto;
             }}
-            .cover-image {{
-                max-width: 100%;
-                max-height: 70vh;
-                object-fit: contain;
-                margin: 20px auto;
-                border-radius: 10px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            }}
-            .simple-cover {{
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                padding: 60px 20px;
-                border-radius: 10px;
-                color: white;
-                margin: 20px;
-            }}
-            .simple-cover h1 {{
-                color: white;
-            }}
-            .simple-cover .author {{
-                color: rgba(255,255,255,0.9);
-            }}
-            .copyright {{
-                text-align: center;
-                font-size: 12px;
-                color: #999;
-                margin-top: 50px;
-                padding-top: 20px;
-                border-top: 1px solid #eee;
-            }}
-            .toc {{
-                background: #f9f9f9;
-                padding: 20px;
-                border-radius: 5px;
-                margin: 30px 0;
-            }}
-            .toc ul {{
-                list-style-type: none;
-                padding-left: 0;
-            }}
-            .toc li {{
-                margin-bottom: 10px;
-            }}
-            .toc a {{
-                color: #3498db;
-                text-decoration: none;
-            }}
-            .toc a:hover {{
-                text-decoration: underline;
-            }}
-            @media print {{
-                body {{
-                    padding: 0.5in;
-                }}
-                .cover-page {{
-                    page-break-after: always;
-                    min-height: auto;
-                }}
-            }}
-        </style>
-    </head>
-    <body>
-    """)
+        }}
+    </style>
+</head>
+<body>
+""")
     
     # COVER PAGE
     html_parts.append('<div class="cover-page">')
@@ -350,31 +369,29 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
         try:
             img_base64 = base64.b64encode(cover_image).decode()
             html_parts.append(f'''
-            <div>
                 <img src="data:image/jpeg;base64,{img_base64}" class="cover-image">
-                <h1>{title}</h1>
-                <p class="author">by {author}</p>
-            </div>
+                <h1>{html.escape(title)}</h1>
+                <p class="author">by {html.escape(author)}</p>
             ''')
         except Exception:
             html_parts.append(f'''
-            <div class="simple-cover">
-                <h1>{title}</h1>
-                <p class="author">by {author}</p>
-            </div>
+                <div class="simple-cover">
+                    <h1>{html.escape(title)}</h1>
+                    <p class="author">by {html.escape(author)}</p>
+                </div>
             ''')
     else:
         html_parts.append(f'''
-        <div class="simple-cover">
-            <h1>{title}</h1>
-            <p class="author">by {author}</p>
-        </div>
+            <div class="simple-cover">
+                <h1>{html.escape(title)}</h1>
+                <p class="author">by {html.escape(author)}</p>
+            </div>
         ''')
     
     html_parts.append('</div>')
     
     # Copyright page
-    html_parts.append(f'<p class="copyright">© {datetime.now().year} {author}. All rights reserved.</p>')
+    html_parts.append(f'<p class="copyright">© {datetime.now().year} {html.escape(author)}. All rights reserved.</p>')
     
     # Table of Contents
     if include_toc:
@@ -390,8 +407,8 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
             sessions[session_title].append(story)
         
         for session_title in sessions.keys():
-            anchor = session_title.lower().replace(' ', '-').replace('?', '').replace('!', '').replace(',', '')
-            html_parts.append(f'<li><a href="#{anchor}">{session_title}</a></li>')
+            anchor = re.sub(r'[^a-zA-Z0-9\s-]', '', session_title.lower().replace(' ', '-'))
+            html_parts.append(f'<li><a href="#{anchor}">{html.escape(session_title)}</a></li>')
         
         html_parts.append('</ul>')
         html_parts.append('</div>')
@@ -400,28 +417,27 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
     current_session = None
     for story in stories:
         session_title = story.get('session_title', 'Untitled Session')
-        anchor = session_title.lower().replace(' ', '-').replace('?', '').replace('!', '').replace(',', '')
+        anchor = re.sub(r'[^a-zA-Z0-9\s-]', '', session_title.lower().replace(' ', '-'))
         
         if session_title != current_session:
             current_session = session_title
-            html_parts.append(f'<h2 id="{anchor}">{session_title}</h2>')
+            html_parts.append(f'<h2 id="{anchor}">{html.escape(session_title)}</h2>')
         
         if format_style == "interview":
             question_text = story.get('question', '')
-            clean_question = clean_text(question_text)
-            html_parts.append(f'<div class="question">{clean_question}</div>')
+            if question_text:
+                clean_question = clean_text(question_text)
+                html_parts.append(f'<div class="question">{html.escape(clean_question)}</div>')
         
+        # Format answer
         answer_text = story.get('answer_text', '')
         if answer_text:
             clean_answer = clean_text(answer_text)
             
-            html_parts.append('<div>')
             paragraphs = clean_answer.split('\n')
             for para in paragraphs:
                 if para.strip():
-                    escaped_para = para.strip().replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                    html_parts.append(f'<p>{escaped_para}</p>')
-            html_parts.append('</div>')
+                    html_parts.append(f'<p>{html.escape(para.strip())}</p>')
         
         # Add images
         if include_images and story.get('images'):
@@ -430,15 +446,13 @@ def generate_html(title, author, stories, format_style="interview", include_toc=
                     html_parts.append(f'<img src="data:image/jpeg;base64,{img["base64"]}" class="story-image">')
                     if img.get('caption'):
                         clean_caption = clean_text(img['caption'])
-                        caption = clean_caption.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                        html_parts.append(f'<p class="image-caption">{caption}</p>')
+                        html_parts.append(f'<p class="image-caption">{html.escape(clean_caption)}</p>')
         
         html_parts.append('<hr style="margin: 30px 0; border: none; border-top: 1px dashed #ccc;">')
     
     html_parts.append("""
-    </body>
-    </html>
-    """)
+</body>
+</html>""")
     
     return '\n'.join(html_parts)
 
@@ -517,20 +531,21 @@ def generate_epub(title, author, stories, format_style="interview", include_toc=
     spine = ['nav']
     
     # Create cover page
-    cover_content = f'''
-    <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="style/nav.css"/>
-    </head>
-    <body>
-        <div class="cover-page">
-            <h1>{title}</h1>
-            <h3>by {author}</h3>
-            <p class="copyright">© {datetime.now().year}</p>
-        </div>
-    </body>
-    </html>
-    '''
+    cover_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+    <link rel="stylesheet" type="text/css" href="style/nav.css"/>
+</head>
+<body>
+    <div class="cover-page">
+        <h1>{html.escape(title)}</h1>
+        <h3>by {html.escape(author)}</h3>
+        <p class="copyright">© {datetime.now().year}</p>
+    </div>
+</body>
+</html>
+'''
     
     cover_page = epub.EpubHtml(
         title='Cover',
@@ -544,15 +559,16 @@ def generate_epub(title, author, stories, format_style="interview", include_toc=
     
     # Create TOC
     if include_toc:
-        toc_content = f'''
-        <html>
-        <head>
-            <link rel="stylesheet" type="text/css" href="style/nav.css"/>
-        </head>
-        <body>
-            <h1>Table of Contents</h1>
-            <ul>
-        '''
+        toc_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+    <link rel="stylesheet" type="text/css" href="style/nav.css"/>
+</head>
+<body>
+    <h1>Table of Contents</h1>
+    <ul>
+'''
         
         sessions = {}
         for story in stories:
@@ -562,14 +578,14 @@ def generate_epub(title, author, stories, format_style="interview", include_toc=
             sessions[session_title].append(story)
         
         for session_title in sessions.keys():
-            anchor = session_title.lower().replace(' ', '-').replace('?', '').replace('!', '').replace(',', '')
-            toc_content += f'<li><a href="{anchor}.xhtml">{session_title}</a></li>'
+            anchor = re.sub(r'[^a-zA-Z0-9\s-]', '', session_title.lower().replace(' ', '-'))
+            toc_content += f'<li><a href="{anchor}.xhtml">{html.escape(session_title)}</a></li>\n'
         
         toc_content += '''
-            </ul>
-        </body>
-        </html>
-        '''
+    </ul>
+</body>
+</html>
+'''
         
         toc_page = epub.EpubHtml(
             title='Table of Contents',
@@ -591,9 +607,17 @@ def generate_epub(title, author, stories, format_style="interview", include_toc=
         
         if session_title != current_session:
             current_session = session_title
-            chapter_file = session_title.lower().replace(' ', '-').replace('?', '').replace('!', '').replace(',', '') + '.xhtml'
+            chapter_file = re.sub(r'[^a-zA-Z0-9\s-]', '', session_title.lower().replace(' ', '-')) + '.xhtml'
             
-            chapter_content = f'<h1>{session_title}</h1>'
+            chapter_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+    <link rel="stylesheet" type="text/css" href="style/nav.css"/>
+</head>
+<body>
+    <h1>{html.escape(session_title)}</h1>
+'''
             
             # Create chapter
             chapter = epub.EpubHtml(
@@ -601,18 +625,15 @@ def generate_epub(title, author, stories, format_style="interview", include_toc=
                 file_name=chapter_file,
                 lang='en'
             )
-            chapter.content = chapter_content
-            chapter.add_item(nav_css)
-            book.add_item(chapter)
-            spine.append(chapter)
             chapter_list.append(chapter)
             chapter_index += 1
         
         # Add story content to current chapter
         if format_style == "interview":
             question_text = story.get('question', '')
-            clean_question = clean_text(question_text)
-            chapter.content += f'<div class="question">{clean_question}</div>'
+            if question_text:
+                clean_question = clean_text(question_text)
+                chapter_content += f'<div class="question">{html.escape(clean_question)}</div>\n'
         
         answer_text = story.get('answer_text', '')
         if answer_text:
@@ -620,15 +641,14 @@ def generate_epub(title, author, stories, format_style="interview", include_toc=
             paragraphs = clean_answer.split('\n')
             for para in paragraphs:
                 if para.strip():
-                    escaped_para = para.strip().replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                    chapter.content += f'<p>{escaped_para}</p>'
+                    chapter_content += f'<p>{html.escape(para.strip())}</p>\n'
         
         # Add images
         if include_images and story.get('images'):
             for img in story.get('images', []):
                 if img.get('base64'):
                     img_data = base64.b64decode(img['base64'])
-                    img_file = f"image_{chapter_index}_{img.get('id', '1')}.jpg"
+                    img_file = f"image_{chapter_index}_{hash(img_data) % 10000}.jpg"
                     
                     # Add image to book
                     book_image = epub.EpubImage()
@@ -637,13 +657,17 @@ def generate_epub(title, author, stories, format_style="interview", include_toc=
                     book_image.content = img_data
                     book.add_item(book_image)
                     
-                    chapter.content += f'<img src="images/{img_file}" class="story-image"/>'
+                    chapter_content += f'<img src="images/{img_file}" class="story-image"/>\n'
                     
                     if img.get('caption'):
                         clean_caption = clean_text(img['caption'])
-                        chapter.content += f'<p class="image-caption">{clean_caption}</p>'
+                        chapter_content += f'<p class="image-caption">{html.escape(clean_caption)}</p>\n'
         
-        chapter.content += '<hr/>'
+        chapter_content += '<hr/>\n</body>\n</html>'
+        chapter.content = chapter_content
+        chapter.add_item(nav_css)
+        book.add_item(chapter)
+        spine.append(chapter)
     
     # Add navigation
     book.toc = (
@@ -683,8 +707,8 @@ def generate_pdf(title, author, stories, format_style="interview", include_toc=T
     pdf = PDF()
     pdf.add_page()
     
-    # Set margins
-    pdf.set_left_margin(25.4)  # 1 inch in mm
+    # Set margins (1 inch = 25.4 mm)
+    pdf.set_left_margin(25.4)
     pdf.set_right_margin(25.4)
     pdf.set_top_margin(25.4)
     pdf.set_auto_page_break(True, margin=25.4)
@@ -704,7 +728,7 @@ def generate_pdf(title, author, stories, format_style="interview", include_toc=T
             pdf.image(tmp_path, x=50, y=50, w=110)
             os.unlink(tmp_path)
             
-            # Add title and author
+            # Add title and author below image
             pdf.ln(150)
             pdf.set_font('Times', 'B', 42)
             pdf.cell(0, 20, title, 0, 1, 'C')
@@ -759,10 +783,11 @@ def generate_pdf(title, author, stories, format_style="interview", include_toc=T
         
         if format_style == "interview":
             question_text = story.get('question', '')
-            clean_question = clean_text(question_text)
-            pdf.set_font('Times', 'BI', 12)
-            pdf.multi_cell(0, 6, clean_question)
-            pdf.ln(5)
+            if question_text:
+                clean_question = clean_text(question_text)
+                pdf.set_font('Times', 'BI', 12)
+                pdf.multi_cell(0, 6, clean_question)
+                pdf.ln(5)
         
         answer_text = story.get('answer_text', '')
         if answer_text:
@@ -784,7 +809,9 @@ def generate_pdf(title, author, stories, format_style="interview", include_toc=T
                             tmp_file.write(img_data)
                             tmp_path = tmp_file.name
                         
-                        pdf.image(tmp_path, x=50, w=100)
+                        # Calculate image width to fit page margins
+                        page_width = pdf.w - 2 * pdf.l_margin
+                        pdf.image(tmp_path, x=pdf.l_margin + 10, w=page_width - 20)
                         os.unlink(tmp_path)
                         
                         if img.get('caption'):
@@ -798,8 +825,7 @@ def generate_pdf(title, author, stories, format_style="interview", include_toc=T
         pdf.ln(10)
     
     # Output as bytes
-    pdf_bytes = pdf.output(dest='S').encode('latin-1')
-    return pdf_bytes
+    return pdf.output(dest='S').encode('latin-1')
 
 def generate_rtf(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
     """Generate an RTF file"""
@@ -854,9 +880,10 @@ def generate_rtf(title, author, stories, format_style="interview", include_toc=T
         
         if format_style == "interview":
             question_text = story.get('question', '')
-            clean_question = clean_text(question_text)
-            escaped_question = clean_question.replace('\\', '\\\\').replace('{', '\\{').replace('}', '\\}')
-            rtf_parts.append(f"\\pard\\li720 \\b\\i {escaped_question}\\b0\\i0\\par\\par")
+            if question_text:
+                clean_question = clean_text(question_text)
+                escaped_question = clean_question.replace('\\', '\\\\').replace('{', '\\{').replace('}', '\\}')
+                rtf_parts.append(f"\\pard\\li720 \\b\\i {escaped_question}\\b0\\i0\\par\\par")
         
         answer_text = story.get('answer_text', '')
         if answer_text:
@@ -905,23 +932,26 @@ def main():
         title = st.text_input("Book Title", "My Story Collection")
         author = st.text_input("Author Name", "Anonymous")
         
-        # Format selection
+        # Format selection with new buttons
         st.subheader("Export Formats")
+        
+        # Create columns for format checkboxes
         col1, col2 = st.columns(2)
         with col1:
-            export_docx = st.checkbox("DOCX", value=True)
-            export_html = st.checkbox("HTML", value=True)
-            export_epub = st.checkbox("EPUB", value=False)
+            export_docx = st.checkbox("📄 DOCX", value=True, help="Microsoft Word format")
+            export_html = st.checkbox("🌐 HTML", value=True, help="Web page format")
+            export_epub = st.checkbox("📱 EPUB", value=False, help="E-book format for readers")
         with col2:
-            export_pdf = st.checkbox("PDF/X", value=False)
-            export_rtf = st.checkbox("RTF", value=False)
+            export_pdf = st.checkbox("📑 PDF/X", value=False, help="Print-ready PDF format")
+            export_rtf = st.checkbox("📝 RTF", value=False, help="Rich Text Format")
         
         # Cover options
         st.subheader("Cover Options")
         cover_choice = st.radio(
             "Cover Type",
             ["simple", "uploaded"],
-            format_func=lambda x: "Simple Text Cover" if x == "simple" else "Upload Cover Image"
+            format_func=lambda x: "Simple Text Cover" if x == "simple" else "Upload Cover Image",
+            help="Choose between text-only cover or uploaded image"
         )
         
         cover_image = None
@@ -929,17 +959,30 @@ def main():
             uploaded_cover = st.file_uploader("Upload Cover Image", type=['png', 'jpg', 'jpeg'])
             if uploaded_cover:
                 cover_image = uploaded_cover.read()
+                st.image(cover_image, width=200, caption="Cover Preview")
         
         # Formatting options
         st.subheader("Formatting")
         format_style = st.selectbox(
             "Story Format",
             ["interview", "narrative"],
-            format_func=lambda x: "Interview (Q&A)" if x == "interview" else "Narrative"
+            format_func=lambda x: "Interview (Q&A)" if x == "interview" else "Narrative",
+            help="Choose how stories are formatted"
         )
         
         include_toc = st.checkbox("Include Table of Contents", value=True)
         include_images = st.checkbox("Include Images", value=True)
+        
+        # Show selected formats summary
+        selected_formats = []
+        if export_docx: selected_formats.append("DOCX")
+        if export_html: selected_formats.append("HTML")
+        if export_epub: selected_formats.append("EPUB")
+        if export_pdf: selected_formats.append("PDF")
+        if export_rtf: selected_formats.append("RTF")
+        
+        if selected_formats:
+            st.info(f"📥 Will generate: {', '.join(selected_formats)}")
     
     # Main content area - Story input
     st.header("Add Your Stories")
@@ -951,9 +994,9 @@ def main():
     # Session management
     col1, col2 = st.columns([3, 1])
     with col1:
-        session_title = st.text_input("Session Title", "Session 1")
+        session_title = st.text_input("Session Title", "Session 1", help="Group related stories together")
     with col2:
-        if st.button("➕ New Session"):
+        if st.button("➕ New Session", use_container_width=True):
             st.session_state.stories.append({
                 'session_title': session_title,
                 'question': '',
@@ -963,25 +1006,29 @@ def main():
             st.rerun()
     
     # Display existing stories
+    if not st.session_state.stories:
+        st.info("👆 Click 'New Session' to start adding your first story")
+    
     for i, story in enumerate(st.session_state.stories):
-        with st.expander(f"Story {i+1}: {story.get('session_title', 'Untitled')}", expanded=False):
+        with st.expander(f"📖 Story {i+1}: {story.get('session_title', 'Untitled')}", expanded=i==len(st.session_state.stories)-1):
             col1, col2 = st.columns([3, 1])
             with col1:
-                story['session_title'] = st.text_input(f"Session Title", story['session_title'], key=f"session_{i}")
+                story['session_title'] = st.text_input("Session Title", story['session_title'], key=f"session_{i}")
             with col2:
-                if st.button(f"🗑️ Delete", key=f"del_{i}"):
+                if st.button(f"🗑️ Delete Story", key=f"del_{i}", use_container_width=True):
                     st.session_state.stories.pop(i)
                     st.rerun()
             
-            story['question'] = st.text_area(f"Question/Prompt", story.get('question', ''), key=f"q_{i}")
-            story['answer_text'] = st.text_area(f"Answer/Story", story.get('answer_text', ''), height=200, key=f"a_{i}")
+            story['question'] = st.text_area("Question/Prompt", story.get('question', ''), key=f"q_{i}", height=100)
+            story['answer_text'] = st.text_area("Answer/Story", story.get('answer_text', ''), height=200, key=f"a_{i}")
             
             # Image upload for each story
             uploaded_files = st.file_uploader(
                 f"Upload Images for Story {i+1}",
                 type=['png', 'jpg', 'jpeg'],
                 accept_multiple_files=True,
-                key=f"img_{i}"
+                key=f"img_{i}",
+                help="Add images to accompany this story"
             )
             
             if uploaded_files:
@@ -1003,15 +1050,17 @@ def main():
             
             # Display existing images
             if story.get('images'):
-                st.write("Uploaded Images:")
+                st.write("📸 Uploaded Images:")
+                cols = st.columns(min(3, len(story['images'])))
                 for j, img in enumerate(story['images']):
-                    st.image(base64.b64decode(img['base64']), width=100, caption=img.get('caption', ''))
-                    if st.button(f"Remove Image {j+1}", key=f"rm_{i}_{j}"):
-                        story['images'].pop(j)
-                        st.rerun()
+                    with cols[j % 3]:
+                        st.image(base64.b64decode(img['base64']), width=150, caption=img.get('caption', 'No caption'))
+                        if st.button(f"Remove Image", key=f"rm_{i}_{j}"):
+                            story['images'].pop(j)
+                            st.rerun()
     
     # Add new story button
-    if st.button("➕ Add Another Story"):
+    if st.button("➕ Add Another Story", use_container_width=True):
         st.session_state.stories.append({
             'session_title': session_title,
             'question': '',
@@ -1026,70 +1075,69 @@ def main():
         if not st.session_state.stories:
             st.error("Please add at least one story before generating the book.")
         else:
-            with st.spinner("Generating your book..."):
+            with st.spinner("🔄 Generating your book... This may take a moment."):
                 generated_files = {}
+                progress_bar = st.progress(0)
                 
                 # Generate each selected format
-                if export_docx:
-                    docx_data = generate_docx(
-                        title, author, st.session_state.stories,
-                        format_style, include_toc, include_images,
-                        cover_image, cover_choice
-                    )
-                    generated_files['docx'] = docx_data
+                formats_to_generate = []
+                if export_docx: formats_to_generate.append(('docx', '📄 DOCX'))
+                if export_html: formats_to_generate.append(('html', '🌐 HTML'))
+                if export_epub: formats_to_generate.append(('epub', '📱 EPUB'))
+                if export_pdf: formats_to_generate.append(('pdf', '📑 PDF'))
+                if export_rtf: formats_to_generate.append(('rtf', '📝 RTF'))
                 
-                if export_html:
-                    html_data = generate_html(
-                        title, author, st.session_state.stories,
-                        format_style, include_toc, include_images,
-                        cover_image, cover_choice
-                    )
-                    generated_files['html'] = html_data.encode('utf-8')
+                for idx, (fmt, label) in enumerate(formats_to_generate):
+                    progress_bar.progress((idx) / len(formats_to_generate), text=f"Generating {label}...")
+                    
+                    if fmt == 'docx':
+                        data = generate_docx(title, author, st.session_state.stories, format_style, include_toc, include_images, cover_image, cover_choice)
+                    elif fmt == 'html':
+                        html_str = generate_html(title, author, st.session_state.stories, format_style, include_toc, include_images, cover_image, cover_choice)
+                        data = html_str.encode('utf-8')
+                    elif fmt == 'epub':
+                        data = generate_epub(title, author, st.session_state.stories, format_style, include_toc, include_images, cover_image, cover_choice)
+                    elif fmt == 'pdf':
+                        data = generate_pdf(title, author, st.session_state.stories, format_style, include_toc, include_images, cover_image, cover_choice)
+                    elif fmt == 'rtf':
+                        data = generate_rtf(title, author, st.session_state.stories, format_style, include_toc, include_images, cover_image, cover_choice)
+                    
+                    generated_files[fmt] = data
                 
-                if export_epub:
-                    epub_data = generate_epub(
-                        title, author, st.session_state.stories,
-                        format_style, include_toc, include_images,
-                        cover_image, cover_choice
-                    )
-                    generated_files['epub'] = epub_data
-                
-                if export_pdf:
-                    pdf_data = generate_pdf(
-                        title, author, st.session_state.stories,
-                        format_style, include_toc, include_images,
-                        cover_image, cover_choice
-                    )
-                    generated_files['pdf'] = pdf_data
-                
-                if export_rtf:
-                    rtf_data = generate_rtf(
-                        title, author, st.session_state.stories,
-                        format_style, include_toc, include_images,
-                        cover_image, cover_choice
-                    )
-                    generated_files['rtf'] = rtf_data
+                progress_bar.progress(1.0, text="✅ Generation complete!")
+                progress_bar.empty()
                 
                 # Show celebration
                 show_celebration()
                 
                 # Display download buttons
-                st.subheader("Download Your Book")
+                st.subheader("📥 Download Your Book")
                 
                 if generated_files:
+                    # Create columns for download buttons
                     cols = st.columns(len(generated_files))
+                    
+                    mime_types = {
+                        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'html': 'text/html',
+                        'epub': 'application/epub+zip',
+                        'pdf': 'application/pdf',
+                        'rtf': 'application/rtf'
+                    }
+                    
+                    button_icons = {
+                        'docx': '📄',
+                        'html': '🌐',
+                        'epub': '📱',
+                        'pdf': '📑',
+                        'rtf': '📝'
+                    }
+                    
                     for idx, (fmt, data) in enumerate(generated_files.items()):
                         with cols[idx]:
                             file_name = f"{title.replace(' ', '_')}.{fmt}"
-                            mime_types = {
-                                'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                'html': 'text/html',
-                                'epub': 'application/epub+zip',
-                                'pdf': 'application/pdf',
-                                'rtf': 'application/rtf'
-                            }
                             st.download_button(
-                                label=f"Download {fmt.upper()}",
+                                label=f"{button_icons.get(fmt, '📥')} Download {fmt.upper()}",
                                 data=data,
                                 file_name=file_name,
                                 mime=mime_types.get(fmt, 'application/octet-stream'),
