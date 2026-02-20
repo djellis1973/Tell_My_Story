@@ -23,13 +23,9 @@ import zipfile
 st.set_page_config(page_title="Tell My Story - Your Life Timeline", page_icon="📖", layout="wide", initial_sidebar_state="expanded")
 
 # ============================================================================
-# IMPORT BIOGRAPHY PUBLISHER
+# PUBLISHER AVAILABILITY (will be defined later)
 # ============================================================================
-try:
-    from biography_publisher import generate_docx, generate_html, generate_epub, generate_rtf, generate_pdf, show_celebration
-    PUBLISHER_AVAILABLE = True
-except ImportError as e:
-    st.error(f"❌ Please ensure biography_publisher.py is in the same directory")
+PUBLISHER_AVAILABLE = True  # We'll define all functions in this file❌ Please ensure biography_publisher.py is in the same directory")
     st.stop()
 
 # ============================================================================
@@ -3282,6 +3278,499 @@ with st.sidebar:
         else: 
             st.info("No matches found")
 
+
+# ============================================================================
+# PUBLISHER FUNCTIONS - COMPLETE (replaces biography_publisher.py)
+# ============================================================================
+
+def clean_text_for_export(text):
+    """Clean text for export - remove HTML tags but preserve structure"""
+    if not text:
+        return ""
+    
+    # Handle HTML entities
+    text = text.replace('&nbsp;', ' ')
+    text = text.replace('&amp;', '&')
+    text = text.replace('&lt;', '<')
+    text = text.replace('&gt;', '>')
+    text = text.replace('&quot;', '"')
+    text = text.replace('&#39;', "'")
+    
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    return text.strip()
+
+def generate_docx_book(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
+    """Generate a Word document from stories with proper formatting"""
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
+    doc = Document()
+    
+    # Set document margins
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+    
+    # Set default font
+    style = doc.styles['Normal']
+    style.font.name = 'Times New Roman'
+    style.font.size = Pt(12)
+    
+    # COVER PAGE
+    if cover_choice == "uploaded" and cover_image:
+        try:
+            image_stream = io.BytesIO(cover_image)
+            
+            # Add cover image centered
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run()
+            r.add_picture(image_stream, width=Inches(5))
+            
+            # Title below image
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(title)
+            run.font.size = Pt(42)
+            run.font.bold = True
+            
+            # Author
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(f"by {author}")
+            run.font.size = Pt(24)
+            run.font.italic = True
+            
+        except Exception as e:
+            # Fallback to text cover
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(title)
+            run.font.size = Pt(42)
+            run.font.bold = True
+            
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(f"by {author}")
+            run.font.size = Pt(24)
+            run.font.italic = True
+    else:
+        # Simple text cover
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run(title)
+        run.font.size = Pt(42)
+        run.font.bold = True
+        
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run(f"by {author}")
+        run.font.size = Pt(24)
+        run.font.italic = True
+    
+    doc.add_page_break()
+    
+    # Copyright page
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.add_run(f"© {datetime.now().year} {author}. All rights reserved.")
+    doc.add_page_break()
+    
+    # Table of Contents
+    if include_toc:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run("Table of Contents")
+        run.font.size = Pt(18)
+        run.font.bold = True
+        p.paragraph_format.space_after = Pt(12)
+        
+        # Group by session for TOC
+        sessions = {}
+        for story in stories:
+            session_title = story.get('session_title', 'Untitled Session')
+            if session_title not in sessions:
+                sessions[session_title] = []
+            sessions[session_title].append(story)
+        
+        # Add TOC entries
+        for session_title in sessions.keys():
+            p = doc.add_paragraph(f"  {session_title}", style='List Bullet')
+            p.paragraph_format.left_indent = Inches(0.5)
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        
+        doc.add_page_break()
+    
+    # Add stories
+    current_session = None
+    for story in stories:
+        session_title = story.get('session_title', 'Untitled Session')
+        
+        # Add session header if new session
+        if session_title != current_session:
+            current_session = session_title
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(session_title)
+            run.font.size = Pt(16)
+            run.font.bold = True
+            p.paragraph_format.space_before = Pt(12)
+            p.paragraph_format.space_after = Pt(6)
+        
+        if format_style == "interview":
+            # Add question (bold, italic, left-aligned)
+            question_text = story.get('question', '')
+            clean_question = clean_text_for_export(question_text)
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            run = p.add_run(clean_question)
+            run.font.bold = True
+            run.font.italic = True
+            p.paragraph_format.space_before = Pt(6)
+            p.paragraph_format.space_after = Pt(3)
+        
+        # Add answer (with proper paragraph formatting)
+        answer_text = story.get('answer_text', '')
+        if answer_text:
+            clean_answer = clean_text_for_export(answer_text)
+            
+            # Split into paragraphs and add
+            paragraphs = clean_answer.split('\n')
+            for para in paragraphs:
+                if para.strip():
+                    p = doc.add_paragraph(para.strip())
+                    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    p.paragraph_format.first_line_indent = Inches(0.25)
+                    p.paragraph_format.space_after = Pt(6)
+        
+        # Add images
+        if include_images and story.get('images'):
+            for img in story.get('images', []):
+                if img.get('base64'):
+                    try:
+                        img_data = base64.b64decode(img['base64'])
+                        img_stream = io.BytesIO(img_data)
+                        
+                        # Add image centered
+                        p = doc.add_paragraph()
+                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        run = p.add_run()
+                        run.add_picture(img_stream, width=Inches(4))
+                        
+                        # Add caption
+                        if img.get('caption'):
+                            clean_caption = clean_text_for_export(img['caption'])
+                            p = doc.add_paragraph(clean_caption)
+                            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            if p.runs:
+                                p.runs[0].font.size = Pt(10)
+                                p.runs[0].font.italic = True
+                            p.paragraph_format.space_before = Pt(3)
+                            p.paragraph_format.space_after = Pt(6)
+                    except Exception as e:
+                        print(f"Error adding image: {e}")
+                        continue
+        
+        # Add spacing between stories
+        doc.add_paragraph()
+    
+    # Save to bytes
+    docx_bytes = io.BytesIO()
+    doc.save(docx_bytes)
+    docx_bytes.seek(0)
+    
+    return docx_bytes.getvalue()
+
+def generate_html_book(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
+    """Generate an HTML document from stories with proper formatting"""
+    
+    html_parts = []
+    
+    # HTML header with styling for proper book formatting
+    html_parts.append(f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>{html.escape(title)}</title>
+        <style>
+            body {{
+                font-family: 'Georgia', serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 40px 20px;
+                background: #fff;
+            }}
+            h1 {{
+                font-size: 42px;
+                text-align: center;
+                margin-bottom: 10px;
+                color: #000;
+                font-weight: bold;
+            }}
+            h2 {{
+                font-size: 28px;
+                text-align: center;
+                margin-top: 40px;
+                margin-bottom: 20px;
+                color: #444;
+                border-bottom: 2px solid #eee;
+                padding-bottom: 10px;
+                font-weight: bold;
+            }}
+            .author {{
+                text-align: center;
+                font-size: 24px;
+                color: #666;
+                margin-bottom: 40px;
+                font-style: italic;
+            }}
+            .question {{
+                font-weight: bold;
+                font-size: 18px;
+                margin-top: 30px;
+                margin-bottom: 10px;
+                color: #2c3e50;
+                border-left: 4px solid #3498db;
+                padding-left: 15px;
+                text-align: left;
+            }}
+            .answer {{
+                text-align: left;
+                margin-bottom: 20px;
+            }}
+            .answer p {{
+                text-indent: 0.5in;
+                margin-bottom: 6px;
+                text-align: left;
+                line-height: 1.8;
+            }}
+            .story-image {{
+                max-width: 100%;
+                height: auto;
+                display: block;
+                margin: 20px auto;
+                border-radius: 5px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }}
+            .image-caption {{
+                text-align: center;
+                font-size: 14px;
+                color: #666;
+                margin-top: 5px;
+                margin-bottom: 20px;
+                font-style: italic;
+            }}
+            .cover-page {{
+                text-align: center;
+                margin-bottom: 50px;
+                page-break-after: always;
+                min-height: 90vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }}
+            .cover-image {{
+                max-width: 100%;
+                max-height: 70vh;
+                object-fit: contain;
+                margin: 20px auto;
+                border-radius: 10px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            }}
+            .simple-cover {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                padding: 60px 20px;
+                border-radius: 10px;
+                color: white;
+                margin: 20px;
+                text-align: center;
+            }}
+            .simple-cover h1 {{
+                color: white;
+                text-align: center;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            }}
+            .simple-cover .author {{
+                color: rgba(255,255,255,0.9);
+                text-align: center;
+            }}
+            .copyright {{
+                text-align: center;
+                font-size: 12px;
+                color: #999;
+                margin-top: 50px;
+                padding-top: 20px;
+                border-top: 1px solid #eee;
+            }}
+            .toc {{
+                background: #f9f9f9;
+                padding: 20px;
+                border-radius: 5px;
+                margin: 30px 0;
+                text-align: left;
+            }}
+            .toc h3 {{
+                text-align: center;
+                margin-top: 0;
+            }}
+            .toc ul {{
+                list-style-type: none;
+                padding-left: 0;
+            }}
+            .toc li {{
+                margin-bottom: 10px;
+                text-align: left;
+                font-size: 16px;
+            }}
+            .toc a {{
+                color: #3498db;
+                text-decoration: none;
+            }}
+            .toc a:hover {{
+                text-decoration: underline;
+            }}
+            hr {{
+                margin: 30px 0;
+                border: none;
+                border-top: 1px dashed #ccc;
+            }}
+            @media print {{
+                body {{
+                    padding: 0.5in;
+                }}
+                .cover-page {{
+                    page-break-after: always;
+                    min-height: auto;
+                }}
+                h2 {{
+                    page-break-before: always;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+    """)
+    
+    # COVER PAGE
+    html_parts.append('<div class="cover-page">')
+    
+    if cover_choice == "uploaded" and cover_image:
+        try:
+            img_base64 = base64.b64encode(cover_image).decode()
+            html_parts.append(f'''
+            <div>
+                <img src="data:image/jpeg;base64,{img_base64}" class="cover-image" alt="Book Cover">
+                <h1>{html.escape(title)}</h1>
+                <p class="author">by {html.escape(author)}</p>
+            </div>
+            ''')
+        except Exception:
+            html_parts.append(f'''
+            <div class="simple-cover">
+                <h1>{html.escape(title)}</h1>
+                <p class="author">by {html.escape(author)}</p>
+            </div>
+            ''')
+    else:
+        html_parts.append(f'''
+        <div class="simple-cover">
+            <h1>{html.escape(title)}</h1>
+            <p class="author">by {html.escape(author)}</p>
+        </div>
+        ''')
+    
+    html_parts.append('</div>')
+    
+    # Copyright page
+    html_parts.append(f'<p class="copyright">© {datetime.now().year} {html.escape(author)}. All rights reserved.</p>')
+    
+    # Table of Contents
+    if include_toc:
+        html_parts.append('<div class="toc">')
+        html_parts.append('<h3>Table of Contents</h3>')
+        html_parts.append('<ul>')
+        
+        sessions = {}
+        for story in stories:
+            session_title = story.get('session_title', 'Untitled Session')
+            if session_title not in sessions:
+                sessions[session_title] = []
+            sessions[session_title].append(story)
+        
+        for session_title in sessions.keys():
+            anchor = session_title.lower().replace(' ', '-').replace('?', '').replace('!', '').replace(',', '').replace('.', '')
+            html_parts.append(f'<li><a href="#{anchor}">{html.escape(session_title)}</a></li>')
+        
+        html_parts.append('</ul>')
+        html_parts.append('</div>')
+    
+    # Add stories
+    current_session = None
+    for story in stories:
+        session_title = story.get('session_title', 'Untitled Session')
+        anchor = session_title.lower().replace(' ', '-').replace('?', '').replace('!', '').replace(',', '').replace('.', '')
+        
+        if session_title != current_session:
+            current_session = session_title
+            html_parts.append(f'<h2 id="{anchor}">{html.escape(session_title)}</h2>')
+        
+        if format_style == "interview":
+            question_text = story.get('question', '')
+            clean_question = clean_text_for_export(question_text)
+            html_parts.append(f'<div class="question">{html.escape(clean_question)}</div>')
+        
+        # Format answer with proper paragraphs
+        answer_text = story.get('answer_text', '')
+        if answer_text:
+            clean_answer = clean_text_for_export(answer_text)
+            
+            html_parts.append('<div class="answer">')
+            paragraphs = clean_answer.split('\n')
+            for para in paragraphs:
+                if para.strip():
+                    escaped_para = html.escape(para.strip())
+                    html_parts.append(f'<p>{escaped_para}</p>')
+            html_parts.append('</div>')
+        
+        # Add images
+        if include_images and story.get('images'):
+            for img in story.get('images', []):
+                if img.get('base64'):
+                    img_data = img['base64']
+                    # Ensure proper base64 formatting
+                    if not img_data.startswith('data:image'):
+                        html_parts.append(f'<img src="data:image/jpeg;base64,{img_data}" class="story-image" alt="Story image">')
+                    else:
+                        html_parts.append(f'<img src="{img_data}" class="story-image" alt="Story image">')
+                    
+                    if img.get('caption'):
+                        clean_caption = clean_text_for_export(img['caption'])
+                        caption = html.escape(clean_caption)
+                        html_parts.append(f'<p class="image-caption">{caption}</p>')
+        
+        html_parts.append('<hr>')
+    
+    html_parts.append("""
+    </body>
+    </html>
+    """)
+    
+    return '\n'.join(html_parts)
+
+def show_celebration():
+    """Show celebration animation"""
+    st.balloons()
+    st.success("🎉 Your book has been generated successfully!")
+
 # ============================================================================
 # PUBLISHER PAGE - SHOW ON MAIN SCREEN WHEN ACTIVATED
 # ============================================================================
@@ -3293,9 +3782,6 @@ if st.session_state.get('show_publisher', False):
     </style>
     """, unsafe_allow_html=True)
     
-    # Import publisher functions
-    from biography_publisher import generate_docx, generate_html, show_celebration
-    
     # Back button at top
     col1, col2, col3 = st.columns([1, 6, 1])
     with col1:
@@ -3303,161 +3789,232 @@ if st.session_state.get('show_publisher', False):
             st.session_state.show_publisher = False
             st.rerun()
     
-    st.markdown("""
-    <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0 -1rem 2rem -1rem; border-radius: 0 0 20px 20px; color: white;">
-        <h1>📚 Book Publisher</h1>
-        <p>Transform your stories into a beautifully formatted book</p>
-    </div>
-    """, unsafe_allow_html=True)
+    with col2:
+        st.markdown("""
+        <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0 -1rem 2rem -1rem; border-radius: 0 0 20px 20px; color: white;">
+            <h1>📚 Book Publisher</h1>
+            <p>Transform your stories into a beautifully formatted book</p>
+        </div>
+        """, unsafe_allow_html=True)
     
-    # Get data from session state
-    if st.session_state.get('publisher_data'):
-        data = st.session_state.publisher_data
-        stories = data.get('stories', [])
-        user_profile = data.get('user_profile', {})
+    # Get data directly from user data
+    stories_for_export = []
+    
+    if st.session_state.logged_in and st.session_state.user_id:
+        # Build stories directly from session state responses
+        for session in SESSIONS:
+            sid = session["id"]
+            sdata = st.session_state.responses.get(sid, {})
+            
+            for question_text, answer_data in sdata.get("questions", {}).items():
+                # Get images with base64 data
+                images_with_data = []
+                if answer_data.get("images") and st.session_state.image_handler:
+                    for img_ref in answer_data.get("images", []):
+                        img_id = img_ref.get("id")
+                        # Get base64 from image handler
+                        b64 = st.session_state.image_handler.get_image_base64(img_id) if st.session_state.image_handler else None
+                        if b64:
+                            images_with_data.append({
+                                "id": img_id,
+                                "base64": b64,
+                                "caption": img_ref.get("caption", "")
+                            })
+                
+                story_item = {
+                    "question": question_text,
+                    "answer_text": answer_data.get("answer", ""),
+                    "timestamp": answer_data.get("timestamp", ""),
+                    "session_id": sid,
+                    "session_title": session["title"],
+                    "has_images": answer_data.get("has_images", False),
+                    "image_count": answer_data.get("image_count", 0),
+                    "images": images_with_data
+                }
+                stories_for_export.append(story_item)
         
-        # Book details
-        col1, col2 = st.columns(2)
-        with col1:
-            default_title = f"{user_profile.get('first_name', 'My')}'s Story"
-            book_title = st.text_input("Book Title", value=default_title)
-        with col2:
-            default_author = f"{user_profile.get('first_name', '')} {user_profile.get('last_name', '')}".strip()
-            book_author = st.text_input("Author Name", value=default_author if default_author else "Author Name")
-        
-        # Format options
-        st.markdown("---")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            format_style = st.radio(
-                "📝 Format Style",
-                ["interview", "biography"],
-                format_func=lambda x: {
-                    "interview": "Show Questions & Answers", 
-                    "biography": "Just Answers (Biography Style)"
-                }[x],
-                horizontal=True
-            )
-        with col2:
-            include_toc = st.checkbox("📖 Table of Contents", value=True)
-        with col3:
-            cover_choice = st.radio(
-                "🎨 Cover Type",
-                ["simple", "uploaded"],
-                format_func=lambda x: {
-                    "simple": "Simple Gradient Cover",
-                    "uploaded": "Use My Uploaded Image"
-                }[x],
-                horizontal=True
-            )
-        
-        # Show upload option only if user selects "uploaded"
-        if cover_choice == "uploaded":
+        if stories_for_export:
+            # Book details
+            col1, col2 = st.columns(2)
+            with col1:
+                profile = st.session_state.user_account.get('profile', {})
+                default_title = f"{profile.get('first_name', 'My')}'s Story"
+                book_title = st.text_input("Book Title", value=default_title)
+            with col2:
+                default_author = f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
+                book_author = st.text_input("Author Name", value=default_author if default_author else "Author Name")
+            
+            # Format options
             st.markdown("---")
-            st.markdown("### 🖼️ Upload Cover Image")
-            uploaded_image = st.file_uploader("Choose an image (JPG or PNG)", type=['jpg', 'jpeg', 'png'], key="publisher_image_upload")
-            if uploaded_image:
-                st.session_state.cover_image_data = uploaded_image.getvalue()
-                st.image(uploaded_image, width=200, caption="Your cover image")
-                st.success("✅ Cover image ready")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                format_style = st.radio(
+                    "📝 Format Style",
+                    ["interview", "biography"],
+                    format_func=lambda x: {
+                        "interview": "Show Questions & Answers", 
+                        "biography": "Just Answers (Biography Style)"
+                    }[x],
+                    horizontal=True
+                )
+            with col2:
+                include_toc = st.checkbox("📖 Table of Contents", value=True)
+            with col3:
+                cover_choice = st.radio(
+                    "🎨 Cover Type",
+                    ["simple", "uploaded"],
+                    format_func=lambda x: {
+                        "simple": "Simple Gradient Cover",
+                        "uploaded": "Use My Uploaded Image"
+                    }[x],
+                    horizontal=True
+                )
+            
+            # Image uploader for cover
+            uploaded_cover = None
+            if cover_choice == "uploaded":
+                st.markdown("---")
+                st.markdown("### 🖼️ Upload Cover Image")
+                uploaded_cover = st.file_uploader(
+                    "Choose an image (JPG or PNG)", 
+                    type=['jpg', 'jpeg', 'png'], 
+                    key="publisher_cover_upload"
+                )
+                if uploaded_cover:
+                    st.image(uploaded_cover, width=200, caption="Your cover image")
+                    st.success("✅ Cover image ready")
+            
+            # Summary stats
+            st.markdown("---")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Stories", len(stories_for_export))
+            with col2:
+                total_sessions = len(set(s['session_id'] for s in stories_for_export))
+                st.metric("Sessions", total_sessions)
+            with col3:
+                total_images = sum(len(s.get('images', [])) for s in stories_for_export)
+                st.metric("Images", total_images)
+            with col4:
+                total_words = sum(len(s.get('answer_text', '').split()) for s in stories_for_export)
+                st.metric("Words", f"{total_words:,}")
+            
+            # Preview section
+            with st.expander("📖 Preview First 3 Stories", expanded=False):
+                for i, story in enumerate(stories_for_export[:3]):
+                    if format_style == "interview":
+                        st.markdown(f"**Q: {story.get('question', '')}**")
+                    else:
+                        st.markdown(f"**{story.get('session_title', 'Session')}**")
+                    
+                    # Clean and show preview
+                    preview_text = clean_text_for_export(story.get('answer_text', ''))[:300]
+                    st.markdown(f"{preview_text}...")
+                    
+                    if story.get('images'):
+                        st.caption(f"📸 {len(story['images'])} image(s)")
+                    if i < 2:
+                        st.divider()
+            
+            # Generate buttons
+            st.markdown("---")
+            st.markdown("### 🖨️ Generate Your Book")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
+                    with st.spinner("Creating Word document..."):
+                        cover_image_data = uploaded_cover.getvalue() if uploaded_cover else None
+                        
+                        docx_bytes = generate_docx_book(
+                            book_title,
+                            book_author,
+                            stories_for_export,
+                            format_style,
+                            include_toc,
+                            True,  # include_images
+                            cover_image_data,
+                            cover_choice
+                        )
+                        
+                        filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
+                        
+                        st.download_button(
+                            "📥 Download DOCX", 
+                            data=docx_bytes, 
+                            file_name=filename, 
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                            use_container_width=True,
+                            key="docx_download"
+                        )
+                        show_celebration()
+            
+            with col2:
+                if st.button("🌐 Generate HTML", type="primary", use_container_width=True):
+                    with st.spinner("Creating HTML page..."):
+                        cover_image_data = uploaded_cover.getvalue() if uploaded_cover else None
+                        
+                        html_content = generate_html_book(
+                            book_title,
+                            book_author,
+                            stories_for_export,
+                            format_style,
+                            include_toc,
+                            True,  # include_images
+                            cover_image_data,
+                            cover_choice
+                        )
+                        
+                        filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
+                        
+                        st.download_button(
+                            "📥 Download HTML", 
+                            data=html_content, 
+                            file_name=filename, 
+                            mime="text/html", 
+                            use_container_width=True,
+                            key="html_download"
+                        )
+                        show_celebration()
+            
+            # Optional: JSON backup
+            with st.expander("📦 JSON Backup", expanded=False):
+                complete_data = {
+                    "user": st.session_state.user_id,
+                    "user_profile": st.session_state.user_account.get('profile', {}),
+                    "book_title": book_title,
+                    "book_author": book_author,
+                    "stories": stories_for_export,
+                    "export_date": datetime.now().isoformat(),
+                    "summary": {
+                        "total_stories": len(stories_for_export),
+                        "total_sessions": total_sessions,
+                        "total_words": total_words
+                    }
+                }
+                json_data = json.dumps(complete_data, indent=2)
+                st.download_button(
+                    label="📥 Download JSON Backup", 
+                    data=json_data,
+                    file_name=f"Tell_My_Story_Backup_{st.session_state.user_id}.json",
+                    mime="application/json", 
+                    use_container_width=True
+                )
+        
         else:
-            st.session_state.cover_image_data = None
-        
-        # Summary stats
-        st.markdown("---")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Stories", len(stories))
-        with col2:
-            st.metric("Sessions", data.get('summary', {}).get('total_sessions', 1))
-        with col3:
-            total_images = sum(len(s.get('images', [])) for s in stories)
-            st.metric("Images", total_images)
-        with col4:
-            total_words = sum(len(s.get('answer_text', '').split()) for s in stories)
-            st.metric("Words", f"{total_words:,}")
-        
-        # Preview section
-        with st.expander("📖 Preview First 3 Stories", expanded=False):
-            for i, story in enumerate(stories[:3]):
-                if format_style == "interview":
-                    st.markdown(f"**Q: {story.get('question', '')}**")
-                else:
-                    st.markdown(f"**{story.get('session_title', 'Session')}**")
-                st.markdown(f"{story.get('answer_text', '')[:300]}...")
-                if story.get('images'):
-                    st.caption(f"📸 {len(story['images'])} image(s)")
-                if i < 2:
-                    st.divider()
-        
-        # Generate buttons
-        st.markdown("---")
-        st.markdown("### 🖨️ Generate Your Book")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("📊 Generate DOCX", type="primary", use_container_width=True):
-                with st.spinner("Creating Word document..."):
-                    cover_image = st.session_state.cover_image_data if cover_choice == "uploaded" else None
-                    
-                    docx_bytes = generate_docx(
-                        book_title,
-                        book_author,
-                        stories,
-                        format_style,
-                        include_toc,
-                        True,
-                        cover_image,
-                        cover_choice
-                    )
-                    filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.docx"
-                    st.download_button(
-                        "📥 Download DOCX", 
-                        data=docx_bytes, 
-                        file_name=filename, 
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
-                        use_container_width=True,
-                        key="docx_download"
-                    )
-                    show_celebration()
-        
-        with col2:
-            if st.button("🌐 Generate HTML", type="primary", use_container_width=True):
-                with st.spinner("Creating HTML page..."):
-                    cover_image = st.session_state.cover_image_data if cover_choice == "uploaded" else None
-                    
-                    html_content = generate_html(
-                        book_title,
-                        book_author,
-                        stories,
-                        format_style,
-                        include_toc,
-                        True,
-                        None,
-                        cover_image,
-                        cover_choice
-                    )
-                    filename = f"{book_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.html"
-                    st.download_button(
-                        "📥 Download HTML", 
-                        data=html_content, 
-                        file_name=filename, 
-                        mime="text/html", 
-                        use_container_width=True,
-                        key="html_download"
-                    )
-                    show_celebration()
-    
+            st.warning("No stories found! Start writing to publish your book.")
+            if st.button("← Return to Main App"):
+                st.session_state.show_publisher = False
+                st.rerun()
     else:
-        st.warning("No story data found. Please return to the main app and export your stories first.")
+        st.warning("Please log in to publish your book.")
         if st.button("← Return to Main App"):
             st.session_state.show_publisher = False
             st.rerun()
     
     # Stop here - don't show main content
     st.stop()
-
 # ============================================================================
 # MAIN CONTENT AREA
 # ============================================================================
