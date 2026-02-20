@@ -1,4 +1,5 @@
 # biographer.py – Tell My Story App (COMPLETE WORKING VERSION)
+import html
 import streamlit as st
 import json
 from datetime import datetime, date
