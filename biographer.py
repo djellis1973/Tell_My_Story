@@ -4338,6 +4338,7 @@ with col5:
     
     # Stop here - don't show main content
     st.stop()
+
 # ============================================================================
 # MAIN CONTENT AREA
 # ============================================================================
@@ -4357,7 +4358,6 @@ if (st.session_state.show_vignette_modal or
     
     st.markdown(f'<div class="main-header"><img src="{LOGO_URL}" class="logo-img"></div>', unsafe_allow_html=True)
     st.stop()
-
 if st.session_state.current_session >= len(SESSIONS): 
     st.session_state.current_session = 0
 
