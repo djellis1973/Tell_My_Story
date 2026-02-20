@@ -3744,25 +3744,130 @@ def show_celebration():
     st.success("🎉 Your book has been generated successfully!")
 
 def generate_pdf_book(title, author, stories, format_style="interview", include_toc=True, include_images=True, cover_image=None, cover_choice="simple"):
-    """Generate a PDF file using WeasyPrint"""
+    """Generate a PDF file using fpdf2 (pure Python)"""
     try:
-        from weasyprint import HTML
+        from fpdf import FPDF
         
-        # First generate HTML content
-        html_content = generate_html_book(
-            title, author, stories, format_style, include_toc, 
-            include_images, cover_image, cover_choice
-        )
+        class PDF(FPDF):
+            def header(self):
+                # No header by default
+                pass
+            
+            def footer(self):
+                # No footer by default
+                pass
         
-        # Convert HTML to PDF
-        pdf_bytes = io.BytesIO()
-        HTML(string=html_content).write_pdf(pdf_bytes)
-        pdf_bytes.seek(0)
+        pdf = PDF()
+        pdf.add_page()
         
-        return pdf_bytes.getvalue()
-    except ImportError:
-        st.error("Please install weasyprint: pip install weasyprint")
-        return None
+        # Set margins for centered text block
+        pdf.set_left_margin(30)
+        pdf.set_right_margin(30)
+        
+        # ===== COVER PAGE =====
+        if cover_choice == "uploaded" and cover_image:
+            try:
+                # Save cover image temporarily
+                img_path = f"/tmp/cover_{datetime.now().timestamp()}.jpg"
+                with open(img_path, 'wb') as f:
+                    f.write(cover_image)
+                
+                # Add image centered
+                pdf.image(img_path, x=30, y=40, w=150)
+                os.remove(img_path)
+            except:
+                # Fallback to text cover
+                pdf.set_font('Times', 'B', 42)
+                pdf.cell(0, 40, title, ln=True, align='C')
+                pdf.ln(20)
+                pdf.set_font('Times', 'I', 24)
+                pdf.cell(0, 20, f"by {author}", ln=True, align='C')
+        else:
+            # Text cover
+            pdf.set_font('Times', 'B', 42)
+            pdf.cell(0, 40, title, ln=True, align='C')
+            pdf.ln(20)
+            pdf.set_font('Times', 'I', 24)
+            pdf.cell(0, 20, f"by {author}", ln=True, align='C')
+        
+        pdf.add_page()
+        
+        # ===== COPYRIGHT PAGE =====
+        pdf.set_font('Times', '', 12)
+        pdf.cell(0, 10, f"© {datetime.now().year} {author}. All rights reserved.", ln=True, align='C')
+        
+        pdf.add_page()
+        
+        # ===== TABLE OF CONTENTS =====
+        if include_toc:
+            pdf.set_font('Times', 'B', 18)
+            pdf.cell(0, 20, "Table of Contents", ln=True, align='C')
+            pdf.ln(10)
+            
+            sessions = {}
+            for story in stories:
+                session_title = story.get('session_title', 'Untitled Session')
+                if session_title not in sessions:
+                    sessions[session_title] = []
+            
+            pdf.set_font('Times', '', 12)
+            for session_title in sessions.keys():
+                pdf.cell(0, 8, f"  • {session_title}", ln=True)
+            
+            pdf.add_page()
+        
+        # ===== STORIES =====
+        current_session = None
+        for story in stories:
+            session_title = story.get('session_title', 'Untitled Session')
+            
+            if session_title != current_session:
+                current_session = session_title
+                pdf.set_font('Times', 'B', 16)
+                pdf.cell(0, 20, session_title, ln=True, align='C')
+                pdf.ln(5)
+            
+            if format_style == "interview":
+                question = clean_text_for_export(story.get('question', ''))
+                pdf.set_font('Times', 'BI', 12)
+                pdf.multi_cell(0, 8, question)
+                pdf.ln(2)
+            
+            answer = clean_text_for_export(story.get('answer_text', ''))
+            if answer:
+                pdf.set_font('Times', '', 12)
+                paragraphs = answer.split('\n')
+                for para in paragraphs:
+                    if para.strip():
+                        pdf.multi_cell(0, 8, para.strip())
+                pdf.ln(5)
+            
+            # Images (simplified)
+            if include_images and story.get('images'):
+                for img in story.get('images', []):
+                    if img.get('base64'):
+                        try:
+                            img_data = base64.b64decode(img['base64'])
+                            img_path = f"/tmp/img_{datetime.now().timestamp()}.jpg"
+                            with open(img_path, 'wb') as f:
+                                f.write(img_data)
+                            
+                            pdf.image(img_path, x=50, y=None, w=110)
+                            os.remove(img_path)
+                            pdf.ln(5)
+                            
+                            if img.get('caption'):
+                                caption = clean_text_for_export(img['caption'])
+                                pdf.set_font('Times', 'I', 10)
+                                pdf.cell(0, 6, caption, ln=True, align='C')
+                                pdf.ln(5)
+                        except:
+                            continue
+        
+        # Generate PDF
+        pdf_bytes = pdf.output(dest='S').encode('latin1')
+        return pdf_bytes
+        
     except Exception as e:
         st.error(f"Error generating PDF: {e}")
         return None
