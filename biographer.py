@@ -4325,12 +4325,13 @@ with col5:
                     use_container_width=True
                 )
         
-        else:
+        else:  # This else is for "if stories_for_export:"
             st.warning("No stories found! Start writing to publish your book.")
             if st.button("← Return to Main App"):
                 st.session_state.show_publisher = False
                 st.rerun()
-    else:
+    
+    else:  # This else is for "if st.session_state.logged_in and st.session_state.user_id:"
         st.warning("Please log in to publish your book.")
         if st.button("← Return to Main App"):
             st.session_state.show_publisher = False
