@@ -3750,11 +3750,9 @@ def generate_pdf_book(title, author, stories, format_style="interview", include_
         
         class PDF(FPDF):
             def header(self):
-                # No header by default
                 pass
             
             def footer(self):
-                # No footer by default
                 pass
         
         pdf = PDF()
@@ -3768,15 +3766,16 @@ def generate_pdf_book(title, author, stories, format_style="interview", include_
         if cover_choice == "uploaded" and cover_image:
             try:
                 # Save cover image temporarily
-                img_path = f"/tmp/cover_{datetime.now().timestamp()}.jpg"
-                with open(img_path, 'wb') as f:
-                    f.write(cover_image)
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                    tmp.write(cover_image)
+                    tmp_path = tmp.name
                 
                 # Add image centered
-                pdf.image(img_path, x=30, y=40, w=150)
-                os.remove(img_path)
-            except:
-                # Fallback to text cover
+                pdf.image(tmp_path, x=30, y=40, w=150)
+                os.unlink(tmp_path)  # Delete temp file
+            except Exception as e:
+                # Fallback to text cover if image fails
                 pdf.set_font('Times', 'B', 42)
                 pdf.cell(0, 40, title, ln=True, align='C')
                 pdf.ln(20)
@@ -3842,31 +3841,32 @@ def generate_pdf_book(title, author, stories, format_style="interview", include_
                         pdf.multi_cell(0, 8, para.strip())
                 pdf.ln(5)
             
-            # Images (simplified)
+            # Images
             if include_images and story.get('images'):
                 for img in story.get('images', []):
                     if img.get('base64'):
                         try:
                             img_data = base64.b64decode(img['base64'])
-                            img_path = f"/tmp/img_{datetime.now().timestamp()}.jpg"
-                            with open(img_path, 'wb') as f:
-                                f.write(img_data)
+                            import tempfile
+                            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                                tmp.write(img_data)
+                                tmp_path = tmp.name
                             
-                            pdf.image(img_path, x=50, y=None, w=110)
-                            os.remove(img_path)
-                            pdf.ln(5)
+                            pdf.image(tmp_path, x=50, y=pdf.get_y(), w=110)
+                            os.unlink(tmp_path)
+                            pdf.ln(40)
                             
                             if img.get('caption'):
                                 caption = clean_text_for_export(img['caption'])
                                 pdf.set_font('Times', 'I', 10)
                                 pdf.cell(0, 6, caption, ln=True, align='C')
                                 pdf.ln(5)
-                        except:
+                        except Exception as e:
+                            print(f"Image error: {e}")
                             continue
         
         # Generate PDF
-        pdf_bytes = pdf.output(dest='S').encode('latin1')
-        return pdf_bytes
+        return pdf.output(dest='S').encode('latin1')
         
     except Exception as e:
         st.error(f"Error generating PDF: {e}")
