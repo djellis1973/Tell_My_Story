@@ -7,9 +7,6 @@ import shutil
 from datetime import datetime
 import uuid
 
-# TEST MESSAGE - DELETE AFTER TESTING
-st.error("🔴🔴🔴 QUESTION BANK MANAGER FILE IS BEING LOADED! 🔴🔴🔴")
-
 class QuestionBankManager:
     def __init__(self, user_id=None):
         self.user_id = user_id
@@ -150,7 +147,15 @@ class QuestionBankManager:
         })
         self._save_user_banks(banks)
         
+        # Show success message
         st.success(f"✅ Bank '{name}' created successfully!")
+        
+        # Auto-navigate to edit this new bank
+        st.session_state.editing_bank_id = bank_id
+        st.session_state.editing_bank_name = name
+        st.session_state.show_bank_editor = True
+        st.rerun()
+        
         return bank_id
     
     def load_user_bank(self, bank_id):
@@ -351,22 +356,11 @@ class QuestionBankManager:
                                 st.rerun()
                 
                 with col2:
-                    # EDIT BUTTON WITH VISUAL DEBUGGING
-                    st.markdown(f"**Bank ID:** {bank['id']}")
-                    st.markdown(f"**Session State:**")
-                    st.json({
-                        "editing_bank_id": st.session_state.get('editing_bank_id'),
-                        "show_bank_editor": st.session_state.get('show_bank_editor', False)
-                    })
-                    
                     if st.button("✏️ Edit", key=f"edit_user_{bank['id']}", 
                                use_container_width=True):
-                        st.success(f"✅ EDIT CLICKED for bank {bank['id']}")
                         st.session_state.editing_bank_id = bank['id']
                         st.session_state.editing_bank_name = bank['name']
                         st.session_state.show_bank_editor = True
-                        st.warning(f"State set - show_bank_editor: {st.session_state.show_bank_editor}")
-                        st.info("Click the 🔁 Rerun button below if nothing happens")
                         st.rerun()
                 
                 with col3:
@@ -421,14 +415,19 @@ class QuestionBankManager:
                                 break
                     
                     self.create_custom_bank(name, description, copy_from)
-                    st.rerun()
+                    # No rerun here - it's handled in create_custom_bank
                 else:
                     st.error("❌ Please enter a bank name")
     
     def display_bank_editor(self, bank_id):
         """Display the bank editor interface"""
-        st.error(f"🔵🔵🔵 DISPLAY BANK EDITOR CALLED with bank_id: {bank_id} 🔵🔵🔵")
-        st.title(f"✏️ Edit Bank")
+        st.markdown(f"""
+        <div style="background-color: #4CAF50; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
+            <h3 style="color: white; margin: 0;">✏️ EDITING BANK: {bank_id}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.title("Edit Bank")
         
         sessions = self.load_user_bank(bank_id)
         
@@ -454,6 +453,10 @@ class QuestionBankManager:
         st.divider()
         
         st.subheader("📋 Sessions")
+        
+        # Show message if no sessions yet
+        if not sessions:
+            st.info("👋 This bank is empty! Click 'Add New Session' below to start adding questions.")
         
         if st.button("➕ Add New Session", use_container_width=True, type="primary"):
             max_id = max([s['id'] for s in sessions], default=0)
