@@ -534,7 +534,9 @@ class SupportSection:
             
             st.markdown("---")
             
-                      
+            st.markdown("""
+            ### Other Ways to Reach Us
+            
             **Response Time:** Within 24-48 hours
             
             **Common Issues:**
