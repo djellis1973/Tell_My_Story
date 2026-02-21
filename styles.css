@@ -1,4 +1,18 @@
 /* styles.css - Complete version for Tell My Story */
+/* Target the exact container from your HTML */
+section[data-testid="stSidebar"] > div:first-child {
+    overflow-y: scroll !important;
+}
+
+section[data-testid="stSidebar"] > div:first-child::-webkit-scrollbar {
+    width: 10px !important;
+    display: block !important;
+}
+
+section[data-testid="stSidebar"] > div:first-child::-webkit-scrollbar-thumb {
+    background: #888 !important;
+    border-radius: 5px !important;
+}
 .main-header {
     text-align: center;
     padding-top: 0.5rem;
