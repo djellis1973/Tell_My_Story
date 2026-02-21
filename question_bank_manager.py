@@ -7,6 +7,10 @@ import shutil
 from datetime import datetime
 import uuid
 
+
+# TEST MESSAGE - DELETE AFTER TESTING
+st.error("🔴🔴🔴 QUESTION BANK MANAGER FILE IS BEING LOADED! 🔴🔴🔴")
+
 class QuestionBankManager:
     def __init__(self, user_id=None):
         self.user_id = user_id
