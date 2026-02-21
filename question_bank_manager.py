@@ -1,15 +1,10 @@
-# question_bank_manager.py - PRODUCTION VERSION WITH VISUAL DEBUGGING
+# question_bank_manager.py - COMPLETE WORKING VERSION
 import streamlit as st
 import pandas as pd
 import json
 import os
-import shutil
 from datetime import datetime
 import uuid
-
-
-# TEST MESSAGE - DELETE AFTER TESTING
-st.error("🔴🔴🔴 QUESTION BANK MANAGER FILE IS BEING LOADED! 🔴🔴🔴")
 
 class QuestionBankManager:
     def __init__(self, user_id=None):
@@ -88,7 +83,7 @@ class QuestionBankManager:
             return self.load_sessions_from_csv(filename)
         return []
     
-    # ============ CUSTOM BANK METHODS - FULLY WORKING ============
+    # ============ CUSTOM BANK METHODS ============
     
     def get_user_banks(self):
         """Get all custom banks for the current user"""
@@ -151,7 +146,13 @@ class QuestionBankManager:
         })
         self._save_user_banks(banks)
         
+        # Show success message and auto-navigate to edit
         st.success(f"✅ Bank '{name}' created successfully!")
+        st.session_state.editing_bank_id = bank_id
+        st.session_state.editing_bank_name = name
+        st.session_state.show_bank_editor = True
+        st.rerun()
+        
         return bank_id
     
     def load_user_bank(self, bank_id):
@@ -182,7 +183,7 @@ class QuestionBankManager:
         return True
     
     def export_user_bank_to_csv(self, bank_id):
-        """Export custom bank to CSV for download - MAKE IT PERMANENT"""
+        """Export custom bank to CSV"""
         sessions = self.load_user_bank(bank_id)
         
         rows = []
@@ -254,14 +255,12 @@ class QuestionBankManager:
     
     def _display_default_banks(self):
         """Display default banks with load buttons"""
-        
         banks = self.get_default_banks()
         
         if not banks:
             st.info("📁 No question banks found. Please add CSV files to the question_banks/default/ folder.")
             return
         
-        # 2-COLUMN GRID
         cols = st.columns(2)
         for i, bank in enumerate(banks):
             with cols[i % 2]:
@@ -302,15 +301,12 @@ class QuestionBankManager:
                                 st.rerun()
     
     def _display_my_banks(self):
-        """Display user's custom banks - FULLY WORKING"""
+        """Display user's custom banks"""
         banks = self.get_user_banks()
         
         if not banks:
             st.info("✨ You haven't created any custom question banks yet. Go to the 'Create New' tab to get started!")
             return
-        
-        # Add a status area at the top
-        status_container = st.empty()
         
         for bank in banks:
             with st.expander(f"📚 {bank['name']}", expanded=False):
@@ -332,7 +328,6 @@ class QuestionBankManager:
                     
                     if st.button(button_label, key=f"load_user_{bank['id']}", 
                                use_container_width=True, type=button_type):
-                        status_container.info(f"Loading bank {bank['id']}...")
                         if not is_loaded:
                             sessions = self.load_user_bank(bank['id'])
                             if sessions:
@@ -341,7 +336,7 @@ class QuestionBankManager:
                                 st.session_state.current_bank_type = "custom"
                                 st.session_state.current_bank_id = bank['id']
                                 
-                                status_container.success(f"✅ Question Bank Loaded: '{bank['name']}'")
+                                st.success(f"✅ Question Bank Loaded: '{bank['name']}'")
                                 
                                 for session in sessions:
                                     session_id = session["id"]
@@ -354,21 +349,16 @@ class QuestionBankManager:
                                             "word_target": session.get("word_target", 500)
                                         }
                                 st.rerun()
-                        else:
-                            status_container.warning("Bank already loaded")
                 
                 with col2:
                     if st.button("✏️ Edit", key=f"edit_user_{bank['id']}", 
                                use_container_width=True):
-                        status_container.info(f"Edit clicked for bank {bank['id']}")
                         st.session_state.editing_bank_id = bank['id']
                         st.session_state.editing_bank_name = bank['name']
                         st.session_state.show_bank_editor = True
-                        status_container.success(f"State set: show_bank_editor=True, bank_id={bank['id']}")
                         st.rerun()
                 
                 with col3:
-                    # EXPORT TO CSV - MAKE IT PERMANENT
                     csv_data = self.export_user_bank_to_csv(bank['id'])
                     if csv_data:
                         st.download_button(
@@ -391,7 +381,7 @@ class QuestionBankManager:
                     if st.button("🗑️ Delete", key=f"delete_user_{bank['id']}", 
                                use_container_width=True):
                         if self.delete_user_bank(bank['id']):
-                            status_container.success(f"✅ Deleted '{bank['name']}'")
+                            st.success(f"✅ Deleted '{bank['name']}'")
                             st.rerun()
     
     def _display_create_bank_form(self):
@@ -419,20 +409,12 @@ class QuestionBankManager:
                                 break
                     
                     self.create_custom_bank(name, description, copy_from)
-                    st.rerun()
                 else:
                     st.error("❌ Please enter a bank name")
     
     def display_bank_editor(self, bank_id):
         """Display the bank editor interface"""
-        # Add visible banner at the top
-        st.markdown("""
-        <div style="background-color: #4CAF50; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
-            <h3 style="color: white; margin: 0;">✏️ BANK EDITOR MODE - EDITING BANK: {}</h3>
-        </div>
-        """.format(bank_id), unsafe_allow_html=True)
-        
-        st.title(f"Edit Bank")
+        st.title(f"✏️ Edit Bank")
         
         sessions = self.load_user_bank(bank_id)
         
@@ -458,6 +440,10 @@ class QuestionBankManager:
         st.divider()
         
         st.subheader("📋 Sessions")
+        
+        # Helpful message for empty banks
+        if not sessions:
+            st.info("👋 This bank is empty! Click 'Add New Session' below to start adding questions.")
         
         if st.button("➕ Add New Session", use_container_width=True, type="primary"):
             max_id = max([s['id'] for s in sessions], default=0)
