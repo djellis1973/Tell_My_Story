@@ -368,7 +368,13 @@ class QuestionBankManager:
                             use_container_width=True
                         )
                     else:
-                        st.button("📥 No Data", disabled=True, use_container_width=True)
+                        # FIXED: Added unique key for disabled button
+                        st.button(
+                            "📥 No Data", 
+                            disabled=True, 
+                            use_container_width=True,
+                            key=f"no_data_{bank['id']}"  # Unique key for each bank
+                        )
                 
                 with col4:
                     if st.button("🗑️ Delete", key=f"delete_user_{bank['id']}", 
@@ -538,4 +544,3 @@ class QuestionBankManager:
         if st.button("🔙 Back to Bank Manager", use_container_width=True):
             st.session_state.show_bank_editor = False
             st.rerun()
-
