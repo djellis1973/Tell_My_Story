@@ -3083,14 +3083,26 @@ with col_support:
 # SUPPORT SECTION - Show when help button clicked
 # ============================================================================
 if st.session_state.get('show_support', False):
+    # Hide the sidebar when in support mode
+    st.markdown("""
+    <style>
+        section[data-testid="stSidebar"] { display: none !important; }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Add Back button at the top (above tabs)
+    col_back1, col_back2, col_back3 = st.columns([1, 2, 1])
+    with col_back2:
+        if st.button("← Back to Writing", type="primary", use_container_width=True):
+            st.session_state.show_support = False
+            st.rerun()
+    
     try:
         from support_section import SupportSection
         support = SupportSection()
         support.render()
-        if st.button("← Back to Writing", use_container_width=True):
-            st.session_state.show_support = False
-            st.rerun()
         st.stop()
+        
     except ImportError:
         st.error("Support section not available. Please ensure support_section.py is in the same directory.")
         if st.button("← Back"):
@@ -3103,7 +3115,6 @@ if st.session_state.get('show_support', False):
             st.session_state.show_support = False
             st.rerun()
         st.stop()
-
 # ============================================================================
 # SIDEBAR
 # ============================================================================
