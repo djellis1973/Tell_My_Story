@@ -231,7 +231,7 @@ class SupportSection:
             "💡 Tips & Tricks",
             "⚖️ Why It's OK to Use AI to Write Your Life Story",      # EXACT TITLE
             "🔒 Why our AI won't steal your Story",                    # EXACT TITLE
-            "📞 Contact Support"
+            "✉️ Contact Support"                                        # NO PHONE ICON
         ])
         
         with tab1:
@@ -250,7 +250,7 @@ class SupportSection:
             self.render_privacy_api()   # Tab 5 - Privacy
         
         with tab6:
-            self.render_contact_support()  # Tab 6 - Contact with WhatsApp
+            self.render_contact_support()  # Tab 6 - Contact with WhatsApp only
     
     def render_searchable_faqs(self):
         """Render searchable FAQ section"""
@@ -474,7 +474,7 @@ class SupportSection:
             """)
     
     def render_contact_support(self):
-        """Render contact/support form with WhatsApp (no phone)"""
+        """Render contact/support form with WhatsApp only - NO PHONE REFERENCES"""
         
         st.markdown("### 📧 Get in Touch")
         
@@ -535,7 +535,7 @@ class SupportSection:
             st.markdown("---")
             
             st.markdown("""
-            ### 📞 Other Ways to Reach Us
+            ### Other Ways to Reach Us
             
             **Response Time:** Within 24-48 hours
             
