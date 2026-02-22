@@ -1,37 +1,49 @@
 /* styles.css - Complete version for Tell My Story */
 
-/* Responsive Quill editor */
+/* EXTREME Quill editor sizing - PIXEL VALUES */
 .ql-container {
-    min-height: 400px !important;
-    height: 70vh !important;  /* 70% of viewport height */
-    max-height: 900px !important;
+    min-height: 900px !important;
+    height: 900px !important;
+    max-height: 1200px !important;
     font-size: 16px !important;
+    border: 2px solid #b5f5ec !important;
 }
 
 .ql-editor {
-    min-height: 400px !important;
-    height: 70vh !important;  /* 70% of viewport height */
-    max-height: 900px !important;
+    min-height: 900px !important;
+    height: 900px !important;
+    max-height: 1200px !important;
     overflow-y: auto !important;
     font-size: 16px !important;
-    line-height: 1.6 !important;
+    line-height: 1.8 !important;
+    padding: 20px !important;
 }
 
-/* For very large screens */
-@media (min-height: 1200px) {
-    .ql-container, .ql-editor {
-        height: 60vh !important;
-        max-height: 800px !important;
-    }
+.ql-toolbar {
+    padding: 12px !important;
+    background-color: #f8f9fa !important;
+    border: 2px solid #b5f5ec !important;
+    border-bottom: none !important;
 }
 
-/* For mobile */
-@media (max-height: 600px) {
-    .ql-container, .ql-editor {
-        height: 400px !important;
-        min-height: 300px !important;
-    }
+/* Target the exact container */
+iframe.ql-container {
+    height: 900px !important;
 }
+
+/* Force all parent containers */
+section[data-testid="stMain"] div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"] {
+    min-height: 1000px !important;
+}
+
+
+
+
+
+
+
+
+
 
 .main-header {
     text-align: center;
@@ -468,4 +480,17 @@ section[data-testid="stSidebar"] .stButton > button {
         flex: 0 1 auto;
         max-width: 300px;
     }
+}
+
+/* ULTIMATE OVERRIDE - place at very end of styles.css */
+.ql-container, 
+.ql-editor, 
+div.ql-container, 
+div.ql-editor,
+section[data-testid="stMain"] .ql-container,
+section[data-testid="stMain"] .ql-editor {
+    min-height: 900px !important;
+    height: 900px !important;
+    max-height: 1200px !important;
+    min-width: 100% !important;
 }
