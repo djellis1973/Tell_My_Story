@@ -1,7 +1,7 @@
-# biographer.py – Tell My Story App (COMPLETE WORKING VERSION with PROMPT ME)
+# biographer.py – Tell My Story App (COMPLETE WORKING VERSION with STREAKS & GAMIFICATION)
 import streamlit as st
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from openai import OpenAI
 import os
 import re
@@ -104,9 +104,13 @@ default_state = {
     "show_publisher": False,
     "cover_image_data": None,
     "show_support": False,
-    # PROMPT ME new variables
     "show_prompt_modal": False,
-    "current_prompt_data": None
+    "current_prompt_data": None,
+    # Gamification celebration flags
+    "milestone_achieved_first_story": False,
+    "milestone_achieved_seven_day": False,
+    "milestone_achieved_five_thousand": False,
+    "milestone_achieved_first_session": False
 }
 
 for key, value in default_state.items():
@@ -121,6 +125,271 @@ except FileNotFoundError:
     pass
 
 LOGO_URL = "https://menuhunterai.com/wp-content/uploads/2026/02/tms_logo.png"
+
+# ============================================================================
+# GAMIFICATION SYSTEM - STREAKS & MILESTONES
+# ============================================================================
+def update_writing_streak(user_id):
+    """Update the user's writing streak based on today's activity"""
+    if not user_id or not st.session_state.user_account:
+        return
+    
+    today = datetime.now().date()
+    today_str = today.isoformat()
+    
+    # Initialize streak tracking if not exists
+    if 'streak_data' not in st.session_state.user_account:
+        st.session_state.user_account['streak_data'] = {
+            'current_streak': 0,
+            'longest_streak': 0,
+            'last_write_date': None,
+            'streak_history': [],
+            'milestones': {
+                'first_story': False,
+                'seven_day_streak': False,
+                'five_thousand_words': False,
+                'first_session_complete': False
+            }
+        }
+    
+    streak_data = st.session_state.user_account['streak_data']
+    last_date = streak_data.get('last_write_date')
+    
+    # Calculate today's word count (from all sessions)
+    today_words = 0
+    for session in st.session_state.current_question_bank or []:
+        sid = session["id"]
+        if sid in st.session_state.responses:
+            for q_data in st.session_state.responses[sid].get("questions", {}).values():
+                if q_data.get("answer"):
+                    # Check if written today
+                    timestamp = q_data.get("timestamp", "")
+                    if timestamp and timestamp.startswith(today_str):
+                        text_only = re.sub(r'<[^>]+>', '', q_data["answer"])
+                        today_words += len(re.findall(r'\w+', text_only))
+    
+    # Only count if at least 50 words written today
+    if today_words >= 50:
+        if last_date == today_str:
+            # Already counted today - no change
+            pass
+        elif last_date == (today - timedelta(days=1)).isoformat():
+            # Consecutive day!
+            streak_data['current_streak'] += 1
+            streak_data['longest_streak'] = max(streak_data['longest_streak'], streak_data['current_streak'])
+        else:
+            # Streak broken or first day
+            streak_data['current_streak'] = 1
+        
+        streak_data['last_write_date'] = today_str
+        
+        # Add to history (keep last 30 days)
+        streak_data['streak_history'].append({
+            'date': today_str,
+            'words': today_words
+        })
+        # Keep only last 90 days
+        streak_data['streak_history'] = streak_data['streak_history'][-90:]
+        
+        # Check milestones
+        check_milestones(user_id, streak_data)
+        
+        save_account_data(st.session_state.user_account)
+
+def check_milestones(user_id, streak_data):
+    """Check and update milestone achievements"""
+    milestones = streak_data.get('milestones', {})
+    
+    # First Story (100 words total)
+    if not milestones.get('first_story'):
+        total_words = st.session_state.user_account["stats"].get("total_words", 0)
+        if total_words >= 100:
+            milestones['first_story'] = True
+            st.session_state[f"milestone_achieved_first_story"] = True
+    
+    # 7-Day Streak
+    if not milestones.get('seven_day_streak'):
+        if streak_data.get('current_streak', 0) >= 7:
+            milestones['seven_day_streak'] = True
+            st.session_state[f"milestone_achieved_seven_day"] = True
+    
+    # 5,000 Total Words
+    if not milestones.get('five_thousand_words'):
+        total_words = st.session_state.user_account["stats"].get("total_words", 0)
+        if total_words >= 5000:
+            milestones['five_thousand_words'] = True
+            st.session_state[f"milestone_achieved_five_thousand"] = True
+    
+    # First Session Complete
+    if not milestones.get('first_session_complete'):
+        for session in st.session_state.current_question_bank or []:
+            sid = session["id"]
+            if sid in st.session_state.responses:
+                answered = len(st.session_state.responses[sid].get("questions", {}))
+                total = len(session["questions"])
+                if answered >= total and total > 0:
+                    milestones['first_session_complete'] = True
+                    st.session_state[f"milestone_achieved_first_session"] = True
+                    break
+    
+    streak_data['milestones'] = milestones
+
+def get_todays_word_count():
+    """Get total words written today across all sessions"""
+    today = datetime.now().date().isoformat()
+    total = 0
+    
+    for session in st.session_state.current_question_bank or []:
+        sid = session["id"]
+        if sid in st.session_state.responses:
+            for q_data in st.session_state.responses[sid].get("questions", {}).values():
+                timestamp = q_data.get("timestamp", "")
+                if timestamp and timestamp.startswith(today):
+                    text_only = re.sub(r'<[^>]+>', '', q_data.get("answer", ""))
+                    total += len(re.findall(r'\w+', text_only))
+    
+    return total
+
+def get_daily_goal():
+    """Get daily word goal from user settings or default"""
+    # Default goal is 500 words per day
+    return st.session_state.user_account.get('settings', {}).get('daily_word_goal', 500)
+
+def render_gamification_dashboard():
+    """Render the gamification dashboard in the sidebar"""
+    if not st.session_state.user_account:
+        return
+    
+    # Get streak data
+    streak_data = st.session_state.user_account.get('streak_data', {})
+    current_streak = streak_data.get('current_streak', 0)
+    milestones = streak_data.get('milestones', {})
+    
+    # Today's stats
+    today_words = get_todays_word_count()
+    daily_goal = get_daily_goal()
+    goal_percent = min(100, int((today_words / daily_goal) * 100)) if daily_goal > 0 else 0
+    
+    # Total stats
+    total_words = st.session_state.user_account["stats"].get("total_words", 0)
+    
+    # Display streak with fire emoji (more fire = longer streak)
+    fire_emoji = "🔥" * min(5, max(1, (current_streak // 7) + 1)) if current_streak > 0 else "🌱"
+    
+    st.markdown("""
+    <style>
+    .streak-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .streak-number {
+        font-size: 48px;
+        font-weight: bold;
+        line-height: 1;
+    }
+    .streak-label {
+        font-size: 14px;
+        opacity: 0.9;
+    }
+    .progress-container {
+        background: rgba(255,255,255,0.2);
+        border-radius: 10px;
+        height: 10px;
+        margin: 10px 0;
+    }
+    .progress-fill {
+        background: white;
+        border-radius: 10px;
+        height: 10px;
+        transition: width 0.3s ease;
+    }
+    .milestone-item {
+        display: flex;
+        align-items: center;
+        padding: 8px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 5px;
+        margin-bottom: 5px;
+    }
+    .milestone-check {
+        margin-right: 10px;
+        font-size: 18px;
+    }
+    .milestone-text {
+        font-size: 14px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Streak Box
+    st.markdown(f"""
+    <div class="streak-box">
+        <div style="font-size: 32px;">{fire_emoji}</div>
+        <div class="streak-number">{current_streak}</div>
+        <div class="streak-label">DAY STREAK</div>
+        <div class="progress-container">
+            <div class="progress-fill" style="width: {goal_percent}%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+            <span>📝 {today_words} today</span>
+            <span>🎯 {daily_goal} goal</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Quick Stats
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Total Words", f"{total_words:,}")
+    with col2:
+        sessions_completed = 0
+        if st.session_state.current_question_bank:
+            sessions_completed = sum(1 for s in st.session_state.current_question_bank 
+                                   if len(st.session_state.responses.get(s["id"], {}).get("questions", {})) >= len(s["questions"]))
+        st.metric("Sessions Done", f"{sessions_completed}/{len(st.session_state.current_question_bank) if st.session_state.current_question_bank else 0}")
+    
+    st.divider()
+    
+    # Milestones
+    st.markdown("### ✨ Milestones")
+    
+    milestones_list = [
+        ("first_story", "📖 First Story (100 words)", milestones.get('first_story', False)),
+        ("seven_day_streak", "🔥 7-Day Streak", milestones.get('seven_day_streak', False)),
+        ("five_thousand_words", "📚 5,000 Total Words", milestones.get('five_thousand_words', False)),
+        ("first_session_complete", "✅ Complete First Session", milestones.get('first_session_complete', False))
+    ]
+    
+    for key, label, achieved in milestones_list:
+        if achieved:
+            st.markdown(f'<div class="milestone-item"><span class="milestone-check">✅</span><span class="milestone-text">{label}</span></div>', unsafe_allow_html=True)
+        else:
+            # Show progress for unfinished milestones
+            if key == "first_story":
+                progress = min(100, int((total_words / 100) * 100))
+                st.markdown(f'<div class="milestone-item"><span class="milestone-check">⭕</span><span class="milestone-text">{label} ({progress}%)</span></div>', unsafe_allow_html=True)
+            elif key == "seven_day_streak":
+                progress = min(100, int((current_streak / 7) * 100))
+                st.markdown(f'<div class="milestone-item"><span class="milestone-check">⭕</span><span class="milestone-text">{label} ({progress}%)</span></div>', unsafe_allow_html=True)
+            elif key == "five_thousand_words":
+                progress = min(100, int((total_words / 5000) * 100))
+                st.markdown(f'<div class="milestone-item"><span class="milestone-check">⭕</span><span class="milestone-text">{label} ({progress}%)</span></div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="milestone-item"><span class="milestone-check">⭕</span><span class="milestone-text">{label}</span></div>', unsafe_allow_html=True)
+    
+    # Celebration for new achievements
+    for milestone in ['first_story', 'seven_day', 'five_thousand', 'first_session']:
+        flag = f"milestone_achieved_{milestone}"
+        if st.session_state.get(flag):
+            st.balloons()
+            st.success(f"🎉 Achieved: {dict(milestones_list)[milestone]}!")
+            st.session_state[flag] = False
+            time.sleep(2)
+            st.rerun()
 
 # ============================================================================
 # HISTORICAL EVENTS HELPER - SIMPLE VERSION
@@ -660,11 +929,24 @@ def create_user_account(user_data, password=None):
             },
             "settings": {
                 "email_notifications": True, "auto_save": True, "privacy_level": "private",
-                "theme": "light", "email_verified": False
+                "theme": "light", "email_verified": False,
+                "daily_word_goal": 500
             },
             "stats": {
-                "total_sessions": 0, "total_words": 0, "current_streak": 0, "longest_streak": 0,
+                "total_sessions": 0, "total_words": 0,
                 "account_age_days": 0, "last_active": datetime.now().isoformat()
+            },
+            "streak_data": {
+                "current_streak": 0,
+                "longest_streak": 0,
+                "last_write_date": None,
+                "streak_history": [],
+                "milestones": {
+                    "first_story": False,
+                    "seven_day_streak": False,
+                    "five_thousand_words": False,
+                    "first_session_complete": False
+                }
             }
         }
         save_account_data(user_record)
@@ -770,7 +1052,9 @@ def logout_user():
             'current_bank_type', 'current_bank_id', 'show_bank_manager', 'show_bank_editor',
             'editing_bank_id', 'editing_bank_name', 'show_image_manager', 'editor_content',
             'current_rewrite_data', 'show_ai_rewrite', 'show_ai_rewrite_menu',
-            'show_publisher', 'cover_image_data', 'show_prompt_modal', 'current_prompt_data']
+            'show_publisher', 'cover_image_data', 'show_prompt_modal', 'current_prompt_data',
+            'milestone_achieved_first_story', 'milestone_achieved_seven_day',
+            'milestone_achieved_five_thousand', 'milestone_achieved_first_session']
     for key in keys:
         if key in st.session_state: 
             del st.session_state[key]
@@ -1972,6 +2256,9 @@ def save_response(session_id, question, answer):
         st.session_state.user_account["stats"]["total_words"] = st.session_state.user_account["stats"].get("total_words", 0) + word_count
         st.session_state.user_account["stats"]["last_active"] = datetime.now().isoformat()
         save_account_data(st.session_state.user_account)
+        
+        # Update streak after saving
+        update_writing_streak(user_id)
     
     if session_id not in st.session_state.responses:
         session_data = next((s for s in (st.session_state.current_question_bank or []) if s["id"] == session_id), 
@@ -3362,6 +3649,10 @@ if st.session_state.get('show_support', False):
 # ============================================================================
 with st.sidebar:
     st.markdown('<div class="sidebar-header"><h2>Tell My Story</h2><p>Your Life Timeline</p></div>', unsafe_allow_html=True)
+    
+    # Gamification Dashboard at the top
+    render_gamification_dashboard()
+    st.divider()
     
     st.header("👤 Your Profile")
     if st.session_state.user_account:
