@@ -4609,6 +4609,7 @@ if st.session_state.logged_in:
     init_image_handler()
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
 # Add this right before your st_quill editor
+
 if st.button("📺 Open in Distraction-Free Window", key="popup_editor"):
     # Get current content
     current_content = st.session_state.get(content_key, "")
@@ -4636,7 +4637,7 @@ if st.button("📺 Open in Distraction-Free Window", key="popup_editor"):
         </style>
     </head>
     <body>
-        <textarea id="story" placeholder="Write your story here...">{current_content.replace('<p>', '').replace('</p>', '\n\n')}</textarea>
+        <textarea id="story" placeholder="Write your story here...">{current_content.replace('<p>', '').replace('</p>', chr(10) + chr(10))}</textarea>
         <script>
             const textarea = document.getElementById('story');
             textarea.focus();
@@ -4648,7 +4649,7 @@ if st.button("📺 Open in Distraction-Free Window", key="popup_editor"):
             
             // Load saved draft
             const saved = localStorage.getItem('story_draft');
-            if (saved && !confirm('Load your previous draft?')) {{
+            if (saved) {{
                 textarea.value = saved;
             }}
         </script>
