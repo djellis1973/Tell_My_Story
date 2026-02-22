@@ -4844,7 +4844,22 @@ if st.session_state.get('show_publisher', False):
 # ============================================================================
 # MAIN CONTENT AREA
 # ============================================================================
-
+# Main header with logo - FIND THIS SECTION
+col_logo, col_title, col_support = st.columns([1, 3, 1])
+with col_logo:
+    st.markdown(f'<img src="{LOGO_URL}" class="logo-img" style="max-width:100px;">', unsafe_allow_html=True)
+with col_title:
+    st.markdown('<h1 style="margin-top:20px;">Tell My Story</h1>', unsafe_allow_html=True)
+with col_support:
+    # ADD THIS RIGHT HERE - BEFORE THE SUPPORT BUTTON
+    if st.button("☰ Show Sidebar", help="Show sidebar to access all features"):
+        st.rerun()
+    
+    st.markdown('<div style="margin-top:20px;">', unsafe_allow_html=True)
+    if st.button("❓ Help", type="primary", use_container_width=True):
+        st.session_state.show_support = not st.session_state.get('show_support', False)
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 if (st.session_state.show_vignette_modal or 
     st.session_state.show_vignette_manager or 
     st.session_state.show_vignette_detail or
