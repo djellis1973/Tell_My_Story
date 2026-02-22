@@ -4608,7 +4608,57 @@ if current_session_id in st.session_state.responses:
 if st.session_state.logged_in:
     init_image_handler()
     existing_images = st.session_state.image_handler.get_images_for_answer(current_session_id, current_question_text) if st.session_state.image_handler else []
-
+# Add this right before your st_quill editor
+if st.button("📺 Open in Distraction-Free Window", key="popup_editor"):
+    # Get current content
+    current_content = st.session_state.get(content_key, "")
+    
+    # Create popup HTML
+    popup_html = f"""
+    <html>
+    <head>
+        <title>Write without distractions</title>
+        <style>
+            body {{ margin: 0; padding: 20px; background: #f5f5f5; }}
+            textarea {{
+                width: 100%;
+                height: 90vh;
+                padding: 20px;
+                font-size: 18px;
+                line-height: 1.8;
+                border: none;
+                outline: none;
+                resize: none;
+                background: white;
+                box-shadow: 0 0 20px rgba(0,0,0,0.1);
+                font-family: Georgia, serif;
+            }}
+        </style>
+    </head>
+    <body>
+        <textarea id="story" placeholder="Write your story here...">{current_content.replace('<p>', '').replace('</p>', '\n\n')}</textarea>
+        <script>
+            const textarea = document.getElementById('story');
+            textarea.focus();
+            
+            // Auto-save to localStorage
+            textarea.addEventListener('input', function() {{
+                localStorage.setItem('story_draft', this.value);
+            }});
+            
+            // Load saved draft
+            const saved = localStorage.getItem('story_draft');
+            if (saved && !confirm('Load your previous draft?')) {{
+                textarea.value = saved;
+            }}
+        </script>
+    </body>
+    </html>
+    """
+    
+    # Open in new window
+    st.components.v1.html(popup_html, height=0, width=0)
+    st.markdown("✅ Popup opened! Write there, then copy/paste back here.")
 # ============================================================================
 # QUILL EDITOR
 # ============================================================================
