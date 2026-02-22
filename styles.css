@@ -1,31 +1,5 @@
 /* styles.css - Complete version for Tell My Story */
 
-/* Working Quill editor sizing for Streamlit 1.38+ */
-.element-container:has(> iframe) {
-  height: 800px !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
-
-/* Make the editor itself bigger too */
-.ql-container {
-    height: 100% !important;
-    font-size: 16px !important;
-}
-
-.ql-editor {
-    height: 100% !important;
-    font-size: 16px !important;
-    line-height: 1.8 !important;
-    overflow-y: auto !important;
-}
-
-/* Style the toolbar */
-.ql-toolbar {
-    padding: 10px !important;
-    background-color: #f8f9fa !important;
-    border: 2px solid #b5f5ec !important;
-}
 .main-header {
     text-align: center;
     padding-top: 0.5rem;
@@ -462,4 +436,3 @@ section[data-testid="stSidebar"] .stButton > button {
         max-width: 300px;
     }
 }
-
