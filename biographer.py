@@ -4861,40 +4861,56 @@ if st.session_state.current_session >= len(SESSIONS):
 current_session = SESSIONS[st.session_state.current_session]
 current_session_id = current_session["id"]
 
-# Ensure current question index is valid
-if not st.session_state.current_question_override:
-    if st.session_state.current_question >= len(current_session["questions"]):
-        st.session_state.current_question = 0
-    # Extra safety - if still invalid, create a default question
-    if len(current_session["questions"]) == 0:
-        st.warning("⚠️ This session has no questions. Please select another session or add questions.")
-        current_question_text = "No questions available"
-        question_source = "empty"
+# Handle sessions with no questions - create a default writing area
+if len(current_session.get("questions", [])) == 0:
+    st.info(f"📝 **{current_session['title']}** - Free Writing Mode")
+    st.markdown("This chapter has no specific questions. Write freely about whatever comes to mind!")
+    
+    # Create a default question for writing
+    if not st.session_state.current_question_override:
+        current_question_text = f"Free Writing: {current_session['title']}"
+        question_source = "free_writing"
     else:
+        current_question_text = st.session_state.current_question_override
+        question_source = "custom"
+else:
+    # Normal session with questions
+    if not st.session_state.current_question_override:
+        if st.session_state.current_question >= len(current_session["questions"]):
+            st.session_state.current_question = 0
         current_question_text = current_session["questions"][st.session_state.current_question]
         question_source = "regular"
-else:
-    current_question_text = st.session_state.current_question_override
-    question_source = "custom"
-
-# Stop if we have no valid question
-if question_source == "empty":
-    st.stop()
+    else:
+        current_question_text = st.session_state.current_question_override
+        question_source = "custom"
 
 st.markdown("---")
 
 col1, col2 = st.columns([3, 1])
 with col1:
     st.subheader(f"Session {current_session_id}: {current_session['title']}")
-    sdata = st.session_state.responses.get(current_session_id, {})
-    answered = len(sdata.get("questions", {}))
-    total = len(current_session["questions"])
-    if total > 0: 
-        st.progress(answered/total)
-        st.caption(f"📝 Topics explored: {answered}/{total} ({answered/total*100:.0f}%)")
+    if len(current_session.get("questions", [])) > 0:
+        sdata = st.session_state.responses.get(current_session_id, {})
+        answered = len(sdata.get("questions", {}))
+        total = len(current_session["questions"])
+        if total > 0: 
+            st.progress(answered/total)
+            st.caption(f"📝 Topics explored: {answered}/{total} ({answered/total*100:.0f}%)")
+    else:
+        # For blank chapters, show word count instead
+        sdata = st.session_state.responses.get(current_session_id, {})
+        total_words = 0
+        for q_data in sdata.get("questions", {}).values():
+            if q_data.get("answer"):
+                text_only = re.sub(r'<[^>]+>', '', q_data["answer"])
+                total_words += len(re.findall(r'\w+', text_only))
+        st.caption(f"📝 Total words written in this chapter: {total_words}")
+        
 with col2:
     if question_source == "custom":
         st.markdown(f'<div class="custom-topic-badge">{"📝 Vignette" if "Vignette:" in st.session_state.current_question_override else "✨ Custom Topic"}</div>', unsafe_allow_html=True)
+    elif question_source == "free_writing":
+        st.markdown('<div class="custom-topic-badge">📝 Free Writing</div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="topic-counter">Topic {st.session_state.current_question+1} of {len(current_session["questions"])}</div>', unsafe_allow_html=True)
 
@@ -4902,6 +4918,8 @@ st.markdown(f'<div class="question-box">{current_question_text}</div>', unsafe_a
 
 if question_source == "regular":
     st.markdown(f'<div class="chapter-guidance">{current_session.get("guidance", "")}</div>', unsafe_allow_html=True)
+elif question_source == "free_writing":
+    st.info("📝 **Free Writing Mode** - Write whatever you want! There are no specific questions to answer.")
 else:
     if "Vignette:" in current_question_text:
         st.info("📝 **Vignette Mode** - Write a short, focused story about a specific moment or memory.")
