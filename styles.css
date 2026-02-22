@@ -1,5 +1,38 @@
 /* styles.css - Complete version for Tell My Story */
 
+/* Responsive Quill editor */
+.ql-container {
+    min-height: 400px !important;
+    height: 70vh !important;  /* 70% of viewport height */
+    max-height: 900px !important;
+    font-size: 16px !important;
+}
+
+.ql-editor {
+    min-height: 400px !important;
+    height: 70vh !important;  /* 70% of viewport height */
+    max-height: 900px !important;
+    overflow-y: auto !important;
+    font-size: 16px !important;
+    line-height: 1.6 !important;
+}
+
+/* For very large screens */
+@media (min-height: 1200px) {
+    .ql-container, .ql-editor {
+        height: 60vh !important;
+        max-height: 800px !important;
+    }
+}
+
+/* For mobile */
+@media (max-height: 600px) {
+    .ql-container, .ql-editor {
+        height: 400px !important;
+        min-height: 300px !important;
+    }
+}
+
 .main-header {
     text-align: center;
     padding-top: 0.5rem;
