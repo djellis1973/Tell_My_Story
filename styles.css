@@ -1,49 +1,5 @@
 /* styles.css - Complete version for Tell My Story */
 
-/* EXTREME Quill editor sizing - PIXEL VALUES */
-.ql-container {
-    min-height: 900px !important;
-    height: 900px !important;
-    max-height: 1200px !important;
-    font-size: 16px !important;
-    border: 2px solid #b5f5ec !important;
-}
-
-.ql-editor {
-    min-height: 900px !important;
-    height: 900px !important;
-    max-height: 1200px !important;
-    overflow-y: auto !important;
-    font-size: 16px !important;
-    line-height: 1.8 !important;
-    padding: 20px !important;
-}
-
-.ql-toolbar {
-    padding: 12px !important;
-    background-color: #f8f9fa !important;
-    border: 2px solid #b5f5ec !important;
-    border-bottom: none !important;
-}
-
-/* Target the exact container */
-iframe.ql-container {
-    height: 900px !important;
-}
-
-/* Force all parent containers */
-section[data-testid="stMain"] div[data-testid="stVerticalBlock"] div[data-testid="stVerticalBlock"] {
-    min-height: 1000px !important;
-}
-
-
-
-
-
-
-
-
-
 
 .main-header {
     text-align: center;
