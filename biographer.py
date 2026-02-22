@@ -1,4 +1,4 @@
-# biographer.py – Tell My Story App (COMPLETE WORKING VERSION with EPUB & RTF)
+# biographer.py – Tell My Story App (COMPLETE WORKING VERSION with PROMPT ME)
 import streamlit as st
 import json
 from datetime import datetime, date
@@ -20,6 +20,7 @@ import zipfile
 import html
 import subprocess
 import tempfile
+import csv  # Added for historical events
 
 # For EPUB export
 try:
@@ -79,7 +80,7 @@ DEFAULT_WORD_TARGET = 500
 client = OpenAI(api_key=st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY")))
 beta_reader = BetaReader(client) if BetaReader else None
 
-# Initialize session state
+# Initialize session state with PROMPT ME variables added
 default_state = {
     "qb_manager": None, "qb_manager_initialized": False, "user_id": None, "logged_in": False,
     "current_session": 0, "current_question": 0, "responses": {}, "editing": False,
@@ -101,8 +102,11 @@ default_state = {
     "beta_feedback_display": None, "beta_feedback_storage": {},
     "auth_tab": 'login',
     "show_publisher": False,
-    "cover_image_data": None,  # <-- COMMA ADDED HERE
-    "show_support": False  # <-- ADD THIS LINE (no comma needed at the end)
+    "cover_image_data": None,
+    "show_support": False,
+    # PROMPT ME new variables
+    "show_prompt_modal": False,
+    "current_prompt_data": None
 }
 
 for key, value in default_state.items():
@@ -117,6 +121,229 @@ except FileNotFoundError:
     pass
 
 LOGO_URL = "https://menuhunterai.com/wp-content/uploads/2026/02/tms_logo.png"
+
+# ============================================================================
+# HISTORICAL EVENTS HELPER - SIMPLE VERSION
+# ============================================================================
+def get_historical_events_for_prompt(birth_year=None):
+    """Simple function to read historical events from CSV and format them"""
+    events_text = ""
+    try:
+        if os.path.exists("historical_events.csv"):
+            with open("historical_events.csv", 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                events = []
+                for row in reader:
+                    # Extract year for filtering
+                    era = row.get('era_range', '')
+                    year_num = None
+                    if era and birth_year:
+                        # Try to extract first year from era (e.g., "1940s" -> 1940)
+                        import re
+                        years = re.findall(r'\d{4}', era)
+                        if years:
+                            year_num = int(years[0])
+                    
+                    # Only include events after birth year
+                    if birth_year is None or year_num is None or year_num >= birth_year:
+                        events.append(row)
+                
+                # Take first 5 events for the prompt
+                for event in events[:5]:
+                    events_text += f"• {event.get('era_range', '')}: {event.get('event', '')} - {event.get('description', '')[:100]}...\n"
+    except Exception as e:
+        print(f"Could not load historical events: {e}")
+    
+    return events_text
+
+# ============================================================================
+# PROMPT ME - OVERCOME WRITER'S BLOCK
+# ============================================================================
+def generate_writing_prompts(session_title, question_text, existing_answer, profile_context, birth_year=None):
+    """Generate creative prompts to help overcome writer's block"""
+    if not client:
+        return {"error": "OpenAI client not available"}
+    
+    try:
+        # Clean the existing answer
+        clean_answer = re.sub(r'<[^>]+>', '', existing_answer) if existing_answer else ""
+        
+        # Get historical events if available
+        historical_events = get_historical_events_for_prompt(birth_year)
+        historical_context = ""
+        if historical_events:
+            historical_context = f"""
+HISTORICAL EVENTS THAT HAPPENED DURING YOUR LIFETIME:
+{historical_events}
+Consider asking how these events affected their life, family, or community.
+"""
+        
+        # Determine if this is a new topic or continuing
+        if not clean_answer or clean_answer == "Start writing your story here...":
+            context_type = "new_topic"
+            prompt_instruction = "The user hasn't started writing this topic yet."
+        else:
+            context_type = "in_progress"
+            prompt_instruction = f"The user has already written: {clean_answer[:300]}..."
+        
+        system_prompt = f"""You are a compassionate and insightful writing coach, helping someone tell their life story. 
+Your goal is to provide gentle, thought-provoking prompts that help overcome writer's block and spark meaningful memories.
+
+{profile_context}
+
+{historical_context}
+
+CURRENT CONTEXT:
+- Session: {session_title}
+- Question/Topic: {question_text}
+- {prompt_instruction}
+
+TASK: Generate 3-5 thoughtful prompts to help the user continue writing. Each prompt should:
+1. Be specific and personal (not generic writing advice)
+2. Draw from the user's profile context when relevant
+3. If historical events are available, ask how those events affected their life
+4. Help them remember details, emotions, or specific moments
+5. Be warm and encouraging
+6. Feel like a conversation with a supportive friend
+
+FORMAT YOUR RESPONSE WITH THESE SECTIONS:
+🎯 **Quick Start**: [One very simple starting point - just one sentence]
+
+✨ **Memory Prompts**:
+• [Prompt 1 - specific memory trigger]
+• [Prompt 2 - sensory detail or emotion]
+• [Prompt 3 - people or relationships]
+
+🌍 **Historical Connection** (if relevant):
+• [A question about how world events affected their life - e.g., "Do you remember where you were when...?"]
+
+💭 **Deeper Reflection**:
+• [A more profound question to consider]
+
+Keep the tone warm and supportive. Use the user's name if available in profile context.
+"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Please help me write about: {question_text}"}
+            ],
+            max_tokens=800,
+            temperature=0.8
+        )
+        
+        prompts = response.choices[0].message.content.strip()
+        
+        return {
+            "success": True,
+            "prompts": prompts,
+            "context_type": context_type
+        }
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+def show_prompt_me_modal():
+    """Display the Prompt Me modal with writing prompts"""
+    if not st.session_state.get('current_prompt_data'):
+        return
+    
+    st.markdown('<div class="modal-overlay">', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([6, 1])
+    with col1:
+        st.markdown("### 💭 Writing Prompts to Spark Your Memory")
+    with col2:
+        if st.button("✕", key="close_prompt_modal"):
+            st.session_state.show_prompt_modal = False
+            st.session_state.current_prompt_data = None
+            st.rerun()
+    
+    st.markdown("---")
+    
+    prompt_data = st.session_state.current_prompt_data
+    
+    if prompt_data.get('error'):
+        st.error(f"Could not generate prompts: {prompt_data['error']}")
+    else:
+        # Display the prompts
+        st.markdown("""
+        <style>
+        .prompt-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #9b59b6;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .prompt-box h4 {
+            color: #8e44ad;
+            margin-top: 0;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        st.markdown('<div class="prompt-box">', unsafe_allow_html=True)
+        st.markdown(prompt_data['prompts'])
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.markdown("---")
+        st.markdown("*These prompts are personalized based on your profile and what you've written so far.*")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("📋 Copy to Clipboard", key="copy_prompts", use_container_width=True):
+                st.info("✅ Prompts copied! Select the text above and press Ctrl+C")
+        
+        with col2:
+            if st.button("🔄 New Prompts", key="new_prompts", use_container_width=True):
+                with st.spinner("Generating fresh prompts..."):
+                    # Get current context
+                    current_session = st.session_state.current_question_bank[st.session_state.current_session]
+                    current_question_text = st.session_state.current_question_override or current_session["questions"][st.session_state.current_question]
+                    
+                    # Get existing answer
+                    editor_base_key = f"quill_{current_session['id']}_{current_question_text[:20]}"
+                    content_key = f"{editor_base_key}_content"
+                    existing_answer = st.session_state.get(content_key, "")
+                    
+                    # Get profile context
+                    profile_context = get_narrative_gps_for_ai()
+                    
+                    # Get birth year
+                    birth_year = None
+                    if st.session_state.user_account and 'profile' in st.session_state.user_account:
+                        birthdate = st.session_state.user_account['profile'].get('birthdate', '')
+                        if birthdate:
+                            import re
+                            year_match = re.search(r'\d{4}', birthdate)
+                            if year_match:
+                                birth_year = int(year_match.group())
+                    
+                    # Generate new prompts
+                    result = generate_writing_prompts(
+                        current_session['title'],
+                        current_question_text,
+                        existing_answer,
+                        profile_context,
+                        birth_year
+                    )
+                    
+                    if result.get('success'):
+                        st.session_state.current_prompt_data = result
+                        st.rerun()
+                    else:
+                        st.error(result.get('error', 'Failed to generate prompts'))
+        
+        with col3:
+            if st.button("✍️ Start Writing", key="start_writing", type="primary", use_container_width=True):
+                st.session_state.show_prompt_modal = False
+                st.session_state.current_prompt_data = None
+                st.rerun()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
 
 # ============================================================================
 # EMAIL CONFIG
@@ -543,7 +770,7 @@ def logout_user():
             'current_bank_type', 'current_bank_id', 'show_bank_manager', 'show_bank_editor',
             'editing_bank_id', 'editing_bank_name', 'show_image_manager', 'editor_content',
             'current_rewrite_data', 'show_ai_rewrite', 'show_ai_rewrite_menu',
-            'show_publisher', 'cover_image_data']
+            'show_publisher', 'cover_image_data', 'show_prompt_modal', 'current_prompt_data']
     for key in keys:
         if key in st.session_state: 
             del st.session_state[key]
@@ -1188,7 +1415,7 @@ def show_ai_rewrite_modal():
         with col2:
             if st.button("📝 Replace Original", key="replace_rewrite", type="primary", use_container_width=True):
                 # Get the editor content key
-                current_session = SESSIONS[st.session_state.current_session]
+                current_session = st.session_state.current_question_bank[st.session_state.current_session]
                 current_session_id = current_session["id"]
                 current_question_text = st.session_state.current_question_override or current_session["questions"][st.session_state.current_question]
                 
@@ -2071,7 +2298,7 @@ def save_beta_feedback(user_id, session_id, feedback_data):
         if "feedback_type" not in feedback_copy:
             feedback_copy["feedback_type"] = "comprehensive"
         
-        for s in SESSIONS:
+        for s in st.session_state.current_question_bank:
             if str(s["id"]) == session_key:
                 feedback_copy["session_title"] = s["title"]
                 break
@@ -3025,6 +3252,11 @@ if st.session_state.show_ai_rewrite and st.session_state.current_rewrite_data:
     show_ai_rewrite_modal()
     st.stop()
 
+# PROMPT ME MODAL HANDLING
+if st.session_state.get('show_prompt_modal', False) and st.session_state.get('current_prompt_data'):
+    show_prompt_me_modal()
+    st.stop()
+
 if st.session_state.show_privacy_settings:
     show_privacy_settings()
     st.stop()
@@ -3124,6 +3356,7 @@ if st.session_state.get('show_support', False):
             st.session_state.show_support = False
             st.rerun()
         st.stop()
+
 # ============================================================================
 # SIDEBAR
 # ============================================================================
@@ -4436,9 +4669,9 @@ except Exception as e:
 st.markdown("---")
 
 # ============================================================================
-# BUTTONS ROW
+# BUTTONS ROW - WITH PROMPT ME BUTTON ADDED
 # ============================================================================
-col1, col2, col3, col4, col5, col6, col7 = st.columns([1, 1, 1, 1, 1, 1, 2])
+col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([1, 1, 1, 1, 1, 1, 1, 2])
 
 spellcheck_base = f"spell_{editor_base_key}"
 spell_result_key = f"{spellcheck_base}_result"
@@ -4507,13 +4740,60 @@ with col4:
     else:
         st.button("✨ AI Rewrite", key=f"rewrite_disabled_{editor_base_key}", disabled=True, use_container_width=True)
 
+# PROMPT ME BUTTON
 with col5:
+    if st.button("💭 Prompt Me", key=f"prompt_btn_{editor_base_key}", use_container_width=True):
+        with st.spinner("Generating personalized writing prompts..."):
+            # Get profile context
+            profile_context = get_narrative_gps_for_ai()
+            
+            # Get birth year from profile
+            birth_year = None
+            if st.session_state.user_account and 'profile' in st.session_state.user_account:
+                birthdate = st.session_state.user_account['profile'].get('birthdate', '')
+                if birthdate:
+                    import re
+                    year_match = re.search(r'\d{4}', birthdate)
+                    if year_match:
+                        birth_year = int(year_match.group())
+            
+            # Add enhanced profile context
+            if st.session_state.user_account and 'enhanced_profile' in st.session_state.user_account:
+                ep = st.session_state.user_account['enhanced_profile']
+                if ep:
+                    profile_context += "\n\nPersonal background:\n"
+                    if ep.get('first_name'): 
+                        profile_context += f"- Name: {ep.get('first_name')}\n"
+                    if ep.get('birth_place'): 
+                        profile_context += f"- Birth place: {ep['birth_place']}\n"
+                    if ep.get('childhood_home'): 
+                        profile_context += f"- Childhood home: {ep['childhood_home'][:150]}\n"
+                    if ep.get('parents'):
+                        profile_context += f"- Parents: {ep['parents'][:150]}\n"
+            
+            # Generate prompts
+            result = generate_writing_prompts(
+                current_session['title'],
+                current_question_text,
+                current_content,
+                profile_context,
+                birth_year
+            )
+            
+            if result.get('success'):
+                st.session_state.current_prompt_data = result
+                st.session_state.show_prompt_modal = True
+                st.rerun()
+            else:
+                st.error(result.get('error', 'Could not generate prompts'))
+
+with col6:
     button_label = "📂 Close Import" if show_import else "📂 Import File"
     if st.button(button_label, key=f"import_btn_{editor_base_key}", use_container_width=True):
         st.session_state[import_key] = not show_import
         st.rerun()
 
-with col6:
+with col7:
     if st.session_state.get('show_ai_rewrite_menu', False):
         person_option = st.selectbox(
             "Voice:",
@@ -4543,7 +4823,7 @@ with col6:
     else:
         st.markdown("")
 
-with col7:
+with col8:
     nav1, nav2 = st.columns(2)
     with nav1: 
         prev_disabled = st.session_state.current_question == 0
