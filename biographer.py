@@ -979,19 +979,54 @@ def update_accounts_index(user_record):
         return False
 
 def get_account_data(user_id=None, email=None):
+    """Debug version to see where it's looking"""
     try:
+        # Show current directory
+        import os
+        current_dir = os.getcwd()
+        st.write(f"📁 Current directory: {current_dir}")
+        
+        # List all files in current directory
+        st.write("📄 Files in current directory:")
+        for f in os.listdir(current_dir):
+            if f.endswith('.json') or f == 'accounts':
+                st.write(f"  - {f}")
+        
+        # Check accounts folder
+        accounts_path = Path("accounts")
+        st.write(f"📁 Accounts folder exists: {accounts_path.exists()}")
+        
+        if accounts_path.exists():
+            st.write("📄 Files in accounts folder:")
+            for f in accounts_path.glob("*"):
+                st.write(f"  - {f.name}")
+        
         if user_id:
-            fname = f"accounts/{user_id}_account.json"
-            if os.path.exists(fname): 
-                return json.load(open(fname, 'r'))
+            account_path = Path(f"accounts/{user_id}_account.json")
+            st.write(f"🔍 Looking for: {account_path}")
+            if account_path.exists(): 
+                with open(account_path, 'r') as f:
+                    return json.load(f)
+        
         if email:
             email = email.lower().strip()
-            index = json.load(open("accounts/accounts_index.json", 'r')) if os.path.exists("accounts/accounts_index.json") else {}
-            for uid, data in index.items():
-                if data.get("email", "").lower() == email:
-                    return json.load(open(f"accounts/{uid}_account.json", 'r'))
-    except: 
-        pass
+            st.write(f"🔍 Looking for email: {email}")
+            
+            # Try direct file search
+            accounts_dir = Path("accounts")
+            if accounts_dir.exists():
+                for account_file in accounts_dir.glob("*_account.json"):
+                    with open(account_file, 'r') as f:
+                        account = json.load(f)
+                        if account.get('email', '').lower().strip() == email:
+                            st.write(f"✅ Found in: {account_file}")
+                            return account
+            
+            st.write("❌ No match found")
+            
+    except Exception as e:
+        st.write(f"❌ Error: {e}")
+    
     return None
 
 def authenticate_user(email, password):
