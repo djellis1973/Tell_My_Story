@@ -4036,7 +4036,7 @@ with st.sidebar:
     
     # ADMIN BUTTON - Only visible to you
     if st.session_state.logged_in and st.session_state.user_account:
-        if st.session_state.user_account.get('email') == "your-email@gmail.com":  # CHANGE THIS!
+        if st.session_state.user_account.get('email') == "davidellis@gmx.es":  # CHANGE THIS!
             if st.button("👑 Admin Panel", key="admin_btn", use_container_width=True):
                 st.session_state.show_admin = True
                 st.rerun()
