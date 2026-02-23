@@ -995,16 +995,34 @@ def get_account_data(user_id=None, email=None):
     return None
 
 def authenticate_user(email, password):
+    """Debug version to see what's happening"""
     try:
-        account = get_account_data(email=email)
-        if account and verify_password(account['password_hash'], password):
-            account['last_login'] = datetime.now().isoformat()
-            save_account_data(account)
-            return {"success": True, "user_id": account['user_id'], "user_record": account}
-        return {"success": False, "error": "Invalid email or password"}
+        email_clean = email.lower().strip()
+        st.write(f"🔍 Looking for: {email_clean}")  # Debug
+        
+        account = get_account_data(email=email_clean)
+        if account:
+            st.write(f"✅ Found account for: {email_clean}")
+            stored_hash = account['password_hash']
+            input_hash = hashlib.sha256(password.encode()).hexdigest()
+            
+            st.write(f"Stored hash: {stored_hash[:10]}...")
+            st.write(f"Input hash: {input_hash[:10]}...")
+            
+            if stored_hash == input_hash:
+                st.write("✅ Password match!")
+                account['last_login'] = datetime.now().isoformat()
+                save_account_data(account)
+                return {"success": True, "user_id": account['user_id'], "user_record": account}
+            else:
+                st.write("❌ Password mismatch")
+                return {"success": False, "error": "Invalid email or password"}
+        else:
+            st.write(f"❌ No account found for: {email_clean}")
+            return {"success": False, "error": "Invalid email or password"}
     except Exception as e:
+        st.write(f"❌ Error: {e}")
         return {"success": False, "error": str(e)}
-
 def send_welcome_email(user_data, credentials):
     try:
         if not EMAIL_CONFIG['sender_email'] or not EMAIL_CONFIG['sender_password']: 
