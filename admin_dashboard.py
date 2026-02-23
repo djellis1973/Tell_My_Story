@@ -140,6 +140,46 @@ def save_user_subscription(user_id, subscription_data):
         st.error(f"Error saving: {e}")
     return False
 
+def check_user_exists(email):
+    """Check if a user with this email already exists"""
+    email_clean = email.lower().strip()
+    accounts_dir = Path("accounts")
+    if not accounts_dir.exists():
+        return False
+    
+    for account_file in accounts_dir.glob("*_account.json"):
+        try:
+            with open(account_file, 'r') as f:
+                account = json.load(f)
+                if account.get('email', '').lower().strip() == email_clean:
+                    return True
+        except:
+            pass
+    return False
+
+def test_user_login(email, password):
+    """Test if a user can login - for debugging"""
+    email_clean = email.lower().strip()
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    
+    accounts_dir = Path("accounts")
+    if not accounts_dir.exists():
+        return "No accounts folder found"
+    
+    for account_file in accounts_dir.glob("*_account.json"):
+        try:
+            with open(account_file, 'r') as f:
+                account = json.load(f)
+                if account.get('email', '').lower().strip() == email_clean:
+                    stored_hash = account.get('password_hash', '')
+                    if stored_hash == password_hash:
+                        return "✅ Login would succeed!"
+                    else:
+                        return f"❌ Password mismatch. Stored hash: {stored_hash[:10]}..., Your hash: {password_hash[:10]}..."
+        except:
+            pass
+    return "❌ User not found"
+
 # ============================================================================
 # MAIN ADMIN INTERFACE
 # ============================================================================
@@ -179,6 +219,13 @@ st.markdown("""
         font-size: 0.8rem;
         display: inline-block;
     }
+    .debug-box {
+        background: #f0f0f0;
+        padding: 1rem;
+        border-radius: 5px;
+        font-family: monospace;
+        margin: 1rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -190,9 +237,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Load all users
-with st.spinner("Loading user data..."):
-    users = load_all_users()
+# Initialize session state for refresh
+if 'refresh_users' not in st.session_state:
+    st.session_state.refresh_users = True  # Start with True to load on first run
+
+# Load all users (will refresh when flag is set)
+if st.session_state.refresh_users:
+    with st.spinner("Loading user data..."):
+        users = load_all_users()
+        st.session_state.users = users
+        st.session_state.refresh_users = False
+else:
+    users = st.session_state.get('users', [])
 
 # Sidebar stats
 with st.sidebar:
@@ -208,15 +264,22 @@ with st.sidebar:
     
     st.divider()
     
+    if st.button("🔄 Refresh User List", use_container_width=True):
+        st.session_state.refresh_users = True
+        st.rerun()
+    
+    st.divider()
+    
     if st.button("🚪 Logout", use_container_width=True):
         st.session_state.admin_authenticated = False
         st.rerun()
 
 # Main content tabs
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📋 User Management", 
     "📈 Analytics", 
-    "➕ Add User"
+    "➕ Add User",
+    "🔧 Debug Login"
 ])
 
 with tab1:
@@ -306,6 +369,7 @@ with tab1:
                 
                 if save_user_subscription(user['user_id'], subscription_data):
                     st.success(f"✅ Updated subscription for {user['email']}")
+                    st.session_state.refresh_users = True
                     del st.session_state['editing_user']
                     st.rerun()
         
@@ -337,6 +401,7 @@ with tab1:
                     data_file.unlink()
                 
                 st.success(f"User {user['email']} deleted")
+                st.session_state.refresh_users = True
                 del st.session_state['deleting_user']
                 st.rerun()
         
@@ -384,90 +449,142 @@ with tab3:
         
         status = st.selectbox("Subscription Status", ["active", "free"])
         
-        if st.form_submit_button("Create User", type="primary"):
+        # Add a unique key to prevent double submission
+        submitted = st.form_submit_button("Create User", type="primary")
+        
+        if submitted:
             if first_name and last_name and email and password:
-                # Create user ID
-                user_id = hashlib.sha256(f"{email}{datetime.now()}".encode()).hexdigest()[:12]
-                
-                # Create account data - COMPLETE with all required fields
-                account = {
-                    "user_id": user_id,
-                    "email": email.lower().strip(),
-                    "password_hash": hashlib.sha256(password.encode()).hexdigest(),
-                    "account_type": "self",  # CRITICAL: This was missing!
-                    "created_at": datetime.now().isoformat(),
-                    "last_login": None,
-                    "profile": {
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "email": email.lower().strip(),
-                        "gender": "",
-                        "birthdate": "",
-                        "timeline_start": "",
-                        "occupation": "",
-                        "hometown": "",
-                        "current_location": "",
-                        "family": "",
-                        "education": "",
-                        "life_philosophy": "",
-                        "legacy_hopes": ""
-                    },
-                    "narrative_gps": {},
-                    "privacy_settings": {
-                        "profile_public": False,
-                        "stories_public": False,
-                        "allow_sharing": False,
-                        "data_collection": True,
-                        "encryption": True
-                    },
-                    "settings": {
-                        "email_notifications": True,
-                        "auto_save": True,
-                        "privacy_level": "private",
-                        "theme": "light",
-                        "email_verified": False,
-                        "daily_word_goal": 500
-                    },
-                    "stats": {
-                        "total_sessions": 0,
-                        "total_words": 0,
-                        "account_age_days": 0,
-                        "last_active": datetime.now().isoformat()
-                    },
-                    "streak_data": {
-                        "current_streak": 0,
-                        "longest_streak": 0,
-                        "last_write_date": None,
-                        "streak_history": [],
-                        "milestones": {
-                            "first_story": False,
-                            "seven_day_streak": False,
-                            "five_thousand_words": False,
-                            "first_session_complete": False
+                # Check if user already exists
+                if check_user_exists(email):
+                    st.error(f"❌ User with email {email} already exists!")
+                else:
+                    # Create user ID
+                    user_id = hashlib.sha256(f"{email}{datetime.now()}".encode()).hexdigest()[:12]
+                    
+                    # Clean email
+                    email_clean = email.lower().strip()
+                    
+                    # Create account data
+                    account = {
+                        "user_id": user_id,
+                        "email": email_clean,
+                        "password_hash": hashlib.sha256(password.encode()).hexdigest(),
+                        "account_type": "self",
+                        "created_at": datetime.now().isoformat(),
+                        "last_login": None,
+                        "profile": {
+                            "first_name": first_name.strip(),
+                            "last_name": last_name.strip(),
+                            "email": email_clean,
+                            "gender": "",
+                            "birthdate": "",
+                            "timeline_start": "",
+                            "occupation": "",
+                            "hometown": "",
+                            "current_location": "",
+                            "family": "",
+                            "education": "",
+                            "life_philosophy": "",
+                            "legacy_hopes": ""
+                        },
+                        "narrative_gps": {},
+                        "privacy_settings": {
+                            "profile_public": False,
+                            "stories_public": False,
+                            "allow_sharing": False,
+                            "data_collection": True,
+                            "encryption": True
+                        },
+                        "settings": {
+                            "email_notifications": True,
+                            "auto_save": True,
+                            "privacy_level": "private",
+                            "theme": "light",
+                            "email_verified": False,
+                            "daily_word_goal": 500
+                        },
+                        "stats": {
+                            "total_sessions": 0,
+                            "total_words": 0,
+                            "account_age_days": 0,
+                            "last_active": datetime.now().isoformat()
+                        },
+                        "streak_data": {
+                            "current_streak": 0,
+                            "longest_streak": 0,
+                            "last_write_date": None,
+                            "streak_history": [],
+                            "milestones": {
+                                "first_story": False,
+                                "seven_day_streak": False,
+                                "five_thousand_words": False,
+                                "first_session_complete": False
+                            }
+                        },
+                        "subscription": {
+                            "status": status,
+                            "tier": "premium" if status == "active" else "free",
+                            "activated_at": datetime.now().isoformat() if status == "active" else None,
+                            "expires_at": None,
+                            "notes": "",
+                            "last_updated": datetime.now().isoformat()
                         }
-                    },
-                    "subscription": {
-                        "status": status,
-                        "tier": "premium" if status == "active" else "free",
-                        "activated_at": datetime.now().isoformat() if status == "active" else None,
-                        "expires_at": None,
-                        "notes": "",
-                        "last_updated": datetime.now().isoformat()
                     }
-                }
-                
-                # Save account
-                Path("accounts").mkdir(exist_ok=True)
-                account_file = Path(f"accounts/{user_id}_account.json")
-                with open(account_file, 'w') as f:
-                    json.dump(account, f, indent=2)
-                
-                # Create empty data file
-                data_file = Path(f"user_data_{hashlib.md5(user_id.encode()).hexdigest()[:8]}.json")
-                with open(data_file, 'w') as f:
-                    json.dump({"responses": {}}, f)
-                
-                st.success(f"✅ User created! They can now log in with:\nEmail: {email}\nPassword: {password}")
-                st.balloons()
+                    
+                    # Save account
+                    Path("accounts").mkdir(exist_ok=True)
+                    account_file = Path(f"accounts/{user_id}_account.json")
+                    with open(account_file, 'w') as f:
+                        json.dump(account, f, indent=2)
+                    
+                    # Create empty data file
+                    data_file = Path(f"user_data_{hashlib.md5(user_id.encode()).hexdigest()[:8]}.json")
+                    with open(data_file, 'w') as f:
+                        json.dump({"responses": {}}, f)
+                    
+                    st.success(f"✅ User created successfully!")
+                    st.info(f"Email: {email_clean}\nPassword: {password}")
+                    
+                    # Test the login immediately
+                    test_result = test_user_login(email_clean, password)
+                    if "✅" in test_result:
+                        st.success(f"Login test: {test_result}")
+                    else:
+                        st.error(f"Login test: {test_result}")
+                    
+                    # Force refresh
+                    st.session_state.refresh_users = True
+                    st.rerun()
             else:
                 st.error("Please fill all required fields")
+
+with tab4:
+    st.header("🔧 Debug Login Tool")
+    st.write("Test if a user can login to the main app")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        test_email = st.text_input("Test Email", key="test_email")
+    with col2:
+        test_password = st.text_input("Test Password", type="password", key="test_password")
+    
+    if st.button("Test Login", type="primary"):
+        if test_email and test_password:
+            result = test_user_login(test_email, test_password)
+            if "✅" in result:
+                st.success(result)
+            else:
+                st.error(result)
+        else:
+            st.warning("Enter email and password")
+    
+    # Show raw account files for debugging
+    with st.expander("📁 View Raw Account Files"):
+        accounts_dir = Path("accounts")
+        if accounts_dir.exists():
+            for account_file in accounts_dir.glob("*_account.json"):
+                with open(account_file, 'r') as f:
+                    data = json.load(f)
+                st.json(data)
+        else:
+            st.info("No accounts folder found")
