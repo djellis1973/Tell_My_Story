@@ -3311,7 +3311,38 @@ if st.session_state.logged_in and st.session_state.user_id and not st.session_st
                 st.session_state.responses[sid]["questions"] = sdata["questions"]
     st.session_state.data_loaded = True
     init_image_handler()
-
+# ============================================================================
+# SIMPLE ADMIN CHECK - JUST FOR YOU
+# ============================================================================
+# This only runs for YOUR email - everyone else uses app normally
+if st.session_state.logged_in:
+    user_email = st.session_state.user_account.get('email', '')
+    
+    # If this is YOU (the admin), show user list
+    if user_email == "davidellis@gmx.es":  # YOUR email
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 👑 Admin Panel")
+        
+        # Load and show all users
+        accounts_dir = Path("accounts")
+        if accounts_dir.exists():
+            users = []
+            for file in accounts_dir.glob("*_account.json"):
+                with open(file) as f:
+                    user = json.load(f)
+                    users.append({
+                        "email": user.get("email", ""),
+                        "name": f"{user.get('profile', {}).get('first_name', '')} {user.get('profile', {}).get('last_name', '')}",
+                        "file": file
+                    })
+            
+            for user in users:
+                if user['email'] != user_email:  # Don't show yourself
+                    with st.sidebar.expander(f"📧 {user['email']}"):
+                        st.write(f"**Name:** {user['name']}")
+                        if st.button(f"🗑️ Delete", key=user['email']):
+                            Path(user['file']).unlink()  # Delete the file
+                            st.rerun()
 if not SESSIONS:
     st.error("❌ No question bank loaded. Use Bank Manager.")
     if st.button("📋 Open Bank Manager", type="primary", use_container_width=True): 
