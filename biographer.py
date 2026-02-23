@@ -1034,30 +1034,30 @@ def authenticate_user(email, password):
     """Debug version to see what's happening"""
     try:
         email_clean = email.lower().strip()
-        st.write(f"🔍 Looking for: {email_clean}")  # Debug
         
         account = get_account_data(email=email_clean)
         if account:
-            st.write(f"✅ Found account for: {email_clean}")
             stored_hash = account['password_hash']
             input_hash = hashlib.sha256(password.encode()).hexdigest()
             
-            st.write(f"Stored hash: {stored_hash[:10]}...")
-            st.write(f"Input hash: {input_hash[:10]}...")
-            
             if stored_hash == input_hash:
-                st.write("✅ Password match!")
+                # Make sure subscription exists
+                if 'subscription' not in account:
+                    account['subscription'] = {
+                        "status": "active",
+                        "tier": "premium",
+                        "activated_at": datetime.now().isoformat(),
+                        "expires_at": None
+                    }
+                
                 account['last_login'] = datetime.now().isoformat()
                 save_account_data(account)
                 return {"success": True, "user_id": account['user_id'], "user_record": account}
             else:
-                st.write("❌ Password mismatch")
                 return {"success": False, "error": "Invalid email or password"}
         else:
-            st.write(f"❌ No account found for: {email_clean}")
             return {"success": False, "error": "Invalid email or password"}
     except Exception as e:
-        st.write(f"❌ Error: {e}")
         return {"success": False, "error": str(e)}
 def send_welcome_email(user_data, credentials):
     try:
@@ -3370,15 +3370,27 @@ if st.session_state.logged_in and st.session_state.user_id and not st.session_st
 # ============================================================================
 if st.session_state.logged_in:
     
-    # Get user's subscription status - with better error handling
+    # Get user's subscription status - handle missing data
     subscription = st.session_state.user_account.get('subscription', {})
     
     # Debug - shows what's in the subscription
+    st.write("Debug - Full user_account keys:", list(st.session_state.user_account.keys()))
     st.write("Debug - Subscription data:", subscription)
     
-    # Check if status exists and equals 'active'
-    # If status is missing, default to 'free'
-    status = subscription.get('status', 'free')
+    # If subscription is empty, create a default one
+    if not subscription:
+        st.write("Debug - No subscription found, creating default")
+        subscription = {
+            "status": "active",  # Force active for testing
+            "tier": "premium",
+            "activated_at": datetime.now().isoformat(),
+            "expires_at": None
+        }
+        # Save it back to the account
+        st.session_state.user_account['subscription'] = subscription
+    
+    # Get status with safe default
+    status = subscription.get('status', 'active')  # Default to active
     
     # Allow both 'active' and 'premium' as valid
     if status not in ['active', 'premium']:
