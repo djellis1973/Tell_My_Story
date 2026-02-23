@@ -172,6 +172,7 @@ default_state = {
     "confirm_delete": None, 
     "user_account": None, 
     "show_profile_setup": False,
+    "show_admin": False,
     "image_handler": None, 
     "show_image_manager": False,
     "current_rewrite_data": None, 
@@ -3912,6 +3913,11 @@ if st.session_state.show_ai_rewrite and st.session_state.current_rewrite_data:
 
 if st.session_state.get('show_prompt_modal', False) and st.session_state.get('current_prompt_data'):
     show_prompt_me_modal()
+    st.stop()
+
+# ADD THIS RIGHT HERE:
+if st.session_state.get('show_admin', False):
+    show_admin_panel()
     st.stop()
 
 if st.session_state.show_privacy_settings:
